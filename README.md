@@ -61,6 +61,12 @@ npm test          # node --test: pure helpers, Redux hook against real RTK, jsdo
 npm run replay    # real Chrome + the unpacked extension against replayed Forum pages
 ```
 
+Releases are cut by tagging: bump `version` in `extension/manifest.json` (and
+`package.json`), commit, then tag that commit `vX.Y.Z` with the **same**
+version and push the tag. The tag is what triggers the Web Store upload, and
+the release workflow refuses a tag that doesn't match the manifest. Ordinary
+commits and pull requests only run the tests.
+
 `page_grabs/` holds saved Forum pages and HAR files used to derive selectors
 and fixtures (`test/fixtures/` are cut from them). `npm run replay` serves
 those pages and the recorded API responses over a local HTTPS server mapped
