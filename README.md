@@ -49,8 +49,9 @@ Requires Chrome 111+ (content scripts in the page's main world).
 
 ## Releasing
 
-Push a tag `vX.Y.Z` matching `extension/manifest.json` and GitHub Actions
-uploads the package to the Chrome Web Store and submits it for review — see
+Merging a pull request that bumps `version` in `extension/manifest.json`
+makes GitHub Actions upload the package to the Chrome Web Store and submit it
+for review; merges that don't change the version only run the tests. See
 [docs/RELEASING.md](docs/RELEASING.md) for the one-time credential setup.
 
 ## Development
@@ -60,12 +61,6 @@ npm install
 npm test          # node --test: pure helpers, Redux hook against real RTK, jsdom DOM tests
 npm run replay    # real Chrome + the unpacked extension against replayed Forum pages
 ```
-
-Releases are cut by tagging: bump `version` in `extension/manifest.json` (and
-`package.json`), commit, then tag that commit `vX.Y.Z` with the **same**
-version and push the tag. The tag is what triggers the Web Store upload, and
-the release workflow refuses a tag that doesn't match the manifest. Ordinary
-commits and pull requests only run the tests.
 
 `page_grabs/` holds saved Forum pages and HAR files used to derive selectors
 and fixtures (`test/fixtures/` are cut from them). `npm run replay` serves

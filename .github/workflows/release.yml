@@ -1,22 +1,22 @@
-name: Release to Chrome Web Store
+name: Deploy to Chrome Web Store
 
-# Push a tag that matches extension/manifest.json (e.g. v0.5.5) to build,
-# upload and submit for review. Or run it by hand from the Actions tab.
+# Every push to main (i.e. every merged PR) runs the tests. If the merge
+# bumped "version" in extension/manifest.json, the extension is also zipped,
+# uploaded to the Chrome Web Store and submitted for review. A manual run
+# from the Actions tab always uploads (and publishes unless switched off —
+# handy while an earlier submission is still under review).
 on:
   push:
-    tags: ['v*']
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish:
-        description: 'Submit for review after uploading (off = upload only, e.g. while a review is pending)'
+        description: 'Submit for review after uploading (off = upload only)'
         type: boolean
         default: true
 
-permissions:
-  contents: write   # to create the GitHub Release
-
 jobs:
-  release:
+  deploy:
     runs-on: ubuntu-latest
     env:
       EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
@@ -25,6 +25,8 @@ jobs:
       REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # HEAD and its parent(s): needed to see the previous manifest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -32,35 +34,46 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: Check the tag matches manifest.json
+      - name: Did this merge bump the version?
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then TAG="${GITHUB_REF}"; else TAG="v$(node -p "require('./extension/manifest.json').version")"; fi
-          echo "version=$(node scripts/check-version.js "$TAG")" >> "$GITHUB_OUTPUT"
+          CURRENT=$(node -p "require('./extension/manifest.json').version")
+          PREVIOUS=$(git show HEAD^:extension/manifest.json 2>/dev/null | node -p "try{JSON.parse(require('fs').readFileSync(0,'utf8')).version}catch(e){'none'}")
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "manifest version $PREVIOUS -> $CURRENT: deploying"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "manifest version unchanged ($CURRENT): tests only, nothing uploaded"
+          fi
 
       - name: Zip the extension
+        if: steps.version.outputs.deploy == 'true'
         run: |
           cd extension
           zip -r "../forum-grading-helper-${{ steps.version.outputs.version }}.zip" . -x '.DS_Store' '*/.DS_Store'
           cd ..
           unzip -l "forum-grading-helper-${{ steps.version.outputs.version }}.zip"
 
+      - name: Keep the zip as a build artifact
+        if: steps.version.outputs.deploy == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: forum-grading-helper-${{ steps.version.outputs.version }}
+          path: forum-grading-helper-${{ steps.version.outputs.version }}.zip
+
       - name: Check store credentials are configured
+        if: steps.version.outputs.deploy == 'true'
         run: |
           for v in EXTENSION_ID CLIENT_ID CLIENT_SECRET REFRESH_TOKEN; do
             if [ -z "${!v}" ]; then echo "::error::Missing secret CWS_$v — see docs/RELEASING.md"; exit 1; fi
           done
 
       - name: Upload to the Chrome Web Store
+        if: steps.version.outputs.deploy == 'true'
         run: npx --yes chrome-webstore-upload-cli@3 upload --source "forum-grading-helper-${{ steps.version.outputs.version }}.zip"
 
       - name: Submit for review (publish)
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: steps.version.outputs.deploy == 'true' && (github.event_name == 'push' || inputs.publish)
         run: npx --yes chrome-webstore-upload-cli@3 publish
-
-      - name: GitHub Release with the zip
-        if: ${{ github.event_name == 'push' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          files: forum-grading-helper-${{ steps.version.outputs.version }}.zip
-          generate_release_notes: true

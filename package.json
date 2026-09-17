@@ -7,7 +7,7 @@
     "test": "node --test \"test/**/*.test.js\"",
     "replay": "node test/replay/run.js",
     "icons": "node scripts/render-icons.js",
-    "zip": "node scripts/check-version.js \"v$(node -p \"require('./extension/manifest.json').version\")\" >/dev/null && cd extension && zip -qr \"../forum-grading-helper-$(node -p \"require('./manifest.json').version\").zip\" . -x '.DS_Store' '*/.DS_Store' && echo \"wrote forum-grading-helper-$(node -p \"require('./manifest.json').version\").zip\""
+    "zip": "V=$(node -p 'require(\"./extension/manifest.json\").version') && cd extension && zip -qr \"../forum-grading-helper-$V.zip\" . -x '.DS_Store' '*/.DS_Store' && echo \"wrote forum-grading-helper-$V.zip\""
   },
   "devDependencies": {
     "@reduxjs/toolkit": "^2.12.0",

@@ -1,8 +1,8 @@
 name: CI
 
+# Tests on every pull request — the gate before merging to main.
+# (Pushes to main are tested by the deploy workflow.)
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:

@@ -1,9 +1,10 @@
 # Releasing to the Chrome Web Store
 
-Releases are automated by [`.github/workflows/release.yml`](../.github/workflows/release.yml):
-push a tag `vX.Y.Z` that matches `extension/manifest.json` and the workflow
-runs the tests, zips `extension/`, uploads the package to the Web Store,
-submits it for review, and attaches the zip to a GitHub Release.
+Deployment is automated by [`.github/workflows/release.yml`](../.github/workflows/release.yml):
+every push to `main` (i.e. every merged pull request) runs the tests, and if
+that merge bumped `version` in `extension/manifest.json` the workflow also
+zips `extension/`, uploads the package to the Web Store and submits it for
+review. The zip is kept as a build artifact on the workflow run.
 
 ## One-time setup (≈10 minutes)
 
@@ -43,22 +44,21 @@ owning the developer listing, plus a refresh token for it.
 
 ## Cutting a release
 
-```sh
-# bump "version" in extension/manifest.json (and package.json), commit, then:
-git tag v0.5.5
-git push origin main --tags
-```
+1. In a pull request, bump `version` in `extension/manifest.json` (and
+   `package.json`) alongside the changes — the Web Store only accepts a
+   version higher than the one it already has.
+2. Merge it. Watch *Actions → Deploy to Chrome Web Store*: the run logs
+   `manifest version X -> Y: deploying`, uploads and submits for review.
 
-Watch it under *Actions → Release to Chrome Web Store*. The tag must equal the
-manifest version (`scripts/check-version.js` refuses otherwise), and the Web
-Store only accepts versions higher than the one it already has.
+Merges that leave the version unchanged log `tests only, nothing uploaded`.
 
-### While a review is pending
+### Manual runs / while a review is pending
 
 The store rejects `publish` while an earlier submission is still under review
 (the upload itself replaces the pending draft and is accepted). Either wait
 for the review and re-run the failed job, or run the workflow by hand from the
-Actions tab with **publish** unticked to upload only.
+Actions tab — a manual run always uploads the current `main`, and **publish**
+can be unticked to upload only.
 
 ### Manual fallback
 
