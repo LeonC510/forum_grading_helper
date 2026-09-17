@@ -1,0 +1,15 @@
+{
+  "name": "forum-grading-helper",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Chrome extension: Better Forum grading experience. Randomized student order & blind-grading by default.",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "replay": "node test/replay/run.js"
+  },
+  "devDependencies": {
+    "@reduxjs/toolkit": "^2.12.0",
+    "jsdom": "^30.1.0",
+    "puppeteer-core": "^25.11.0"
+  }
+}

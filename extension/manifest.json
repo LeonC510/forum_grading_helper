@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Forum Grading Helper",
+  "version": "0.1.0",
+  "description": "Randomized, persistent student order and blind-by-default grading on Forum (forum.minerva.edu).",
+  "minimum_chrome_version": "111",
+  "action": {
+    "default_title": "Forum Grading Helper",
+    "default_popup": "popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://forum.minerva.edu/app/*"],
+      "css": ["src/shared.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://forum.minerva.edu/app/*"],
+      "exclude_matches": ["https://forum.minerva.edu/app/courses/*/sections/*/classes/*/review*"],
+      "js": ["src/order.js", "src/main-app.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://forum.minerva.edu/app/courses/*/sections/*/classes/*/review*"],
+      "js": ["src/order.js", "src/store-hook.js", "src/class-grader.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

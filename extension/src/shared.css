@@ -1,0 +1,43 @@
+/* Forum Grading Helper — injected on https://forum.minerva.edu/app/* */
+
+/* "Who" heading with our button: keep Forum's heading classes, just lay it
+   out as a row with the button hugging the right edge. */
+h2:has(> .fgh-shuffle) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Plain-text button inheriting the heading's font and colour. */
+.fgh-shuffle {
+  all: unset;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+.fgh-shuffle:hover,
+.fgh-shuffle:focus-visible {
+  text-decoration: underline;
+}
+
+/* Circle-arrow icon: Forum's own "reload" artwork, drawn in the current text
+   colour via a CSS mask — no font or remote asset needed. */
+.fgh-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 17'%3E%3Cpath d='M14.545 8.727A6.553 6.553 0 0 1 8 15.273a6.553 6.553 0 0 1-6.545-6.546A6.553 6.553 0 0 1 8 2.182c1.447 0 2.817.473 3.95 1.333L9.327 5.983l6.667.714L15.68 0l-2.658 2.503A7.938 7.938 0 0 0 8 .727c-4.41 0-8 3.59-8 8 0 4.411 3.59 8 8 8s8-3.589 8-8h-1.455z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 17'%3E%3Cpath d='M14.545 8.727A6.553 6.553 0 0 1 8 15.273a6.553 6.553 0 0 1-6.545-6.546A6.553 6.553 0 0 1 8 2.182c1.447 0 2.817.473 3.95 1.333L9.327 5.983l6.667.714L15.68 0l-2.658 2.503A7.938 7.938 0 0 0 8 .727c-4.41 0-8 3.59-8 8 0 4.411 3.59 8 8 8s8-3.589 8-8h-1.455z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Assignment entrance: the "Blind Grade Assignment" button is now primary
+   (blue), but its icon is a dark-grey glyph made for the white secondary
+   button — invert it to white like the other primary-button icons. */
+.fgh-blind-primary .svg-icon.grade-blind {
+  filter: brightness(0) invert(1);
+}
