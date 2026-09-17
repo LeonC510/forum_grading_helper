@@ -73,6 +73,22 @@
     },
   };
 
+  // A student list's stored order: { ids: string[] | null, manual }. `manual`
+  // is true once the user clicked Shuffle Order (such an order is kept whatever
+  // the popup says); false for one seeded by "Shuffle student order by
+  // default". Orders saved before the flag existed are plain arrays and count
+  // as seeded.
+  function loadOrder(key) {
+    const raw = storage.get(key);
+    if (Array.isArray(raw)) return { ids: raw, manual: false };
+    if (raw && Array.isArray(raw.ids)) return { ids: raw.ids, manual: !!raw.manual };
+    return { ids: null, manual: false };
+  }
+
+  function saveOrder(key, ids, manual) {
+    storage.set(key, { ids: ids, manual: !!manual });
+  }
+
   // <button class="fgh-shuffle …"><span class="fgh-icon"/> Shuffle Order</button>
   // Plain text that inherits the sidebar heading's typography; the icon is a
   // CSS mask in currentColor (see shared.css), so it needs no font or asset.
@@ -152,7 +168,7 @@
     };
   }
 
-  const FGH = { shuffle, mergeOrder, storage, randomInt, makeShuffleButton, progressText, renderProgress, removeProgress, autosize, installAutosize };
+  const FGH = { shuffle, mergeOrder, storage, loadOrder, saveOrder, randomInt, makeShuffleButton, progressText, renderProgress, removeProgress, autosize, installAutosize };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = FGH;
   else root.__forumGradingHelper = FGH;

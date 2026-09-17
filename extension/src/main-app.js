@@ -7,9 +7,10 @@
 //   * assignment entrance → hide "Grade Assignment", make "Blind Grade
 //                           Assignment" the primary button
 //   * assignment grader   → random, persisted gradee order in the "Who" list
-//                           (seeded on first visit unless "Shuffle student
-//                           order by default" is off in the popup); Prev/Next
-//                           follow it; "Shuffle Order" button
+//                           (seeded on first visit while "Shuffle student
+//                           order by default" is on in the popup; off, only an
+//                           order shuffled by hand applies); Prev/Next follow
+//                           it; "Shuffle Order" button
 // All DOM edits happen in a MutationObserver callback (a microtask that runs
 // after the app commits and before the browser paints), so nothing flickers.
 (function (root) {
@@ -116,6 +117,16 @@
     return doc.documentElement.dataset.fghShuffleByDefault !== '0';
   }
 
+  // Put the gradee items in `order` (ids); nothing happens when they already are.
+  function setDomOrder(list, items, order) {
+    if (items.map(function (el) { return el.dataset.gradeeId; }).join(',') === order.join(',')) return;
+    const byId = new Map(items.map(function (el) { return [el.dataset.gradeeId, el]; }));
+    for (const id of order) {
+      const el = byId.get(id);
+      if (el) list.appendChild(el);
+    }
+  }
+
   function stepGradee(delta) {
     tick(); // make sure a freshly re-rendered list is already in our order
     const sel = doc.getElementById('student-selector');
@@ -140,15 +151,21 @@
     if (list && !list.dataset.fghOrdered && type) {
       const items = gradeeItems(sel);
       const ids = items.map(function (el) { return el.dataset.gradeeId; });
-      const stored = FGH.storage.get(key);
-      // Students: random from the first render (popup setting permitting).
-      // Groups, and students with the setting off: only once shuffled.
-      if (stored || (type === 'users' && shuffleByDefault())) {
-        const result = FGH.mergeOrder(stored, ids);
-        if (result.changed) FGH.storage.set(key, result.stored);
-        const byId = new Map(items.map(function (el) { return [el.dataset.gradeeId, el]; }));
-        for (const id of result.order) list.appendChild(byId.get(id));
+      // Forum's own order, seen before we touch the list; put back when the
+      // popup setting is switched off.
+      if (!list.dataset.fghForumOrder) list.dataset.fghForumOrder = ids.join(',');
+      const saved = FGH.loadOrder(key);
+      // An order shuffled by hand always applies (groups are only ever
+      // shuffled by hand); students are otherwise seeded at random from the
+      // first render while the popup setting is on, and in Forum's order off.
+      const manual = saved.manual || (type === 'groups' && !!saved.ids);
+      let order = null;
+      if (manual || (type === 'users' && shuffleByDefault())) {
+        const result = FGH.mergeOrder(saved.ids, ids);
+        if (result.changed) FGH.saveOrder(key, result.stored, manual);
+        order = result.order;
       }
+      setDomOrder(list, items, order || list.dataset.fghForumOrder.split(','));
       list.dataset.fghOrdered = '1';
 
       if (type === 'users' && graderVisit && !graderVisit.hadGradee && !graderVisit.selected) {
@@ -168,7 +185,7 @@
         const s = doc.getElementById('student-selector');
         const l = s && s.querySelector('.dropdown-list');
         if (!l) return;
-        FGH.storage.set(key, FGH.shuffle(gradeeItems(s).map(function (el) { return el.dataset.gradeeId; })));
+        FGH.saveOrder(key, FGH.shuffle(gradeeItems(s).map(function (el) { return el.dataset.gradeeId; })), true);
         delete l.dataset.fghOrdered;
         tick();
       },
@@ -241,9 +258,9 @@
     }
   }, true);
 
-  // Switching "Shuffle student order by default" on from the popup seeds the
-  // list on screen right away: forget that it was ordered and let tick() redo it
-  // (a no-op when an order is already stored, i.e. when switching off).
+  // Switching "Shuffle student order by default" from the popup takes effect
+  // on the list on screen right away: forget that it was ordered and let
+  // tick() order it again (seeding it, or putting Forum's order back).
   function onMutations(records) {
     for (const r of records) {
       if (r.type === 'attributes' && r.attributeName === 'data-fgh-shuffle-by-default') {

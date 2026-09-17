@@ -35,6 +35,8 @@ function check(name, fn) {
   );
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Stored order record { ids, manual } for `key` (null when nothing is stored).
+const storedOrder = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), key);
 
 async function openDropdown(page) {
   await page.click('#student-selector .current-selection');
@@ -84,8 +86,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
       assert.deepEqual(order.slice().sort(), alphabetical.slice().sort());
       assert.notDeepEqual(order, alphabetical);
     }
-    const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY_USERS);
-    assert.deepEqual(stored, order);
+    assert.deepEqual(await storedOrder(page, KEY_USERS), { ids: order, manual: false }, 'seeded, not hand-shuffled');
   });
 
   await check('class grader: poll main screen lists students in the same order as the sidebar', async () => {
@@ -140,7 +141,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     assert.ok(changed);
     assert.deepEqual(next.slice().sort(), order.slice().sort());
     assert.deepEqual(await mainScreenIds(page), next);
-    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY_USERS), next);
+    assert.deepEqual(await storedOrder(page, KEY_USERS), { ids: next, manual: true }, 'hand-shuffled');
     order = next;
   });
 
@@ -229,7 +230,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     assert.deepEqual(after.slice().sort(), before.slice().sort());
     assert.ok(await page.evaluate((k) => localStorage.getItem(k), KEY_GROUPS));
     // Students untouched by the group shuffle.
-    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY_USERS), order);
+    assert.deepEqual((await storedOrder(page, KEY_USERS)).ids, order);
   });
 
   await check('class grader: no page errors', async () => {
@@ -286,7 +287,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     await sleep(500);
     aorder = await gradeeIds();
     assert.ok(aorder.length >= 5, 'gradees: ' + aorder.length);
-    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), AKEY), aorder);
+    assert.deepEqual(await storedOrder(page, AKEY), { ids: aorder, manual: false }, 'seeded, not hand-shuffled');
     assert.notDeepEqual(aorder, aorder.slice().sort(), 'not in Forum\'s order');
     const info = await page.$eval('h2 > button.fgh-shuffle', (b) => ({ prev: b.previousSibling.nodeValue, icon: !!b.querySelector('.fgh-icon'), justify: getComputedStyle(b.parentElement).justifyContent }));
     assert.deepEqual(info, { prev: 'Who', icon: true, justify: 'space-between' });
@@ -302,7 +303,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     }
     assert.ok(changed);
     assert.deepEqual(next.slice().sort(), aorder.slice().sort());
-    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), AKEY), next);
+    assert.deepEqual(await storedOrder(page, AKEY), { ids: next, manual: true }, 'hand-shuffled');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#student-selector.choose-gradee .dropdown-list .gradee', { timeout: 30000 });
     await sleep(500);
@@ -365,34 +366,49 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     await popup.close();
   });
 
-  await check('popup setting "Shuffle student order by default" off: a fresh session keeps Forum\'s order (Shuffle Order still offered); switching it on seeds the open session', async () => {
+  await check('popup setting "Shuffle student order by default": off shows Forum\'s order (fresh or seeded session; hand shuffles kept), on seeds the open session', async () => {
     const popup = await browser.newPage();
     await popup.goto(popupUrl);
     await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
     assert.equal(await popup.$eval('#shuffleByDefault', (e) => e.checked), true, 'on by default');
-    await popup.click('#shuffleByDefault');
+    // Clicking needs the tab in front: headless Chrome renders no frames for a
+    // background tab, so puppeteer's visibility check before a click never settles.
+    const toggle = async () => { await popup.bringToFront(); await popup.click('#shuffleByDefault'); await page.bringToFront(); };
+    // Off, with a session that was never shuffled: Forum's order, nothing stored.
+    await toggle();
     await popup.reload();
     await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
     assert.equal(await popup.$eval('#shuffleByDefault', (e) => e.checked), false, 'persisted');
-    // A session that was never shuffled: forget the stored order and reload.
     await page.evaluate((k) => localStorage.removeItem(k), KEY_USERS);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#poll-col section.poll .response-name', { timeout: 30000 });
     await sleep(500);
-    // Clicking needs the tab in front: headless Chrome renders no frames for a
-    // background tab, so puppeteer's visibility check before a click never settles.
     await page.bringToFront();
     const ids = await openDropdown(page);
     if (alphabetical) assert.deepEqual(ids, alphabetical, 'Forum\'s own order');
-    assert.equal(await page.evaluate((k) => localStorage.getItem(k), KEY_USERS), null, 'nothing stored');
+    assert.equal(await storedOrder(page, KEY_USERS), null, 'nothing stored');
     assert.ok(await page.$('h2 > button.fgh-shuffle'), 'Shuffle Order still offered');
-    await popup.bringToFront();
-    await popup.click('#shuffleByDefault');
+    // On: the open session is seeded right away …
+    await toggle();
     await page.waitForFunction((k) => localStorage.getItem(k) !== null, { timeout: 5000 }, KEY_USERS);
-    await page.bringToFront();
     const seeded = await openDropdown(page);
-    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY_USERS), seeded, 'seeded and persisted');
+    assert.deepEqual(await storedOrder(page, KEY_USERS), { ids: seeded, manual: false }, 'seeded and persisted');
     if (alphabetical) assert.notDeepEqual(seeded, alphabetical);
+    // … and off again puts Forum's order back, keeping the seeded one for later.
+    await toggle();
+    await page.waitForFunction((a) => { const els = document.querySelectorAll('#poll-col section.poll:first-of-type .response-name'); return els.length && [...els].every((e, i) => e.textContent.replace(/^User /, '') === a[i]); }, { timeout: 5000 }, alphabetical || seeded.slice().sort());
+    if (alphabetical) assert.deepEqual(await openDropdown(page), alphabetical, 'Forum\'s order while off');
+    assert.deepEqual(await storedOrder(page, KEY_USERS), { ids: seeded, manual: false }, 'seeded order kept');
+    // A hand shuffle while off sticks, and survives a reload.
+    await page.click('h2 > button.fgh-shuffle');
+    await page.waitForFunction((k) => JSON.parse(localStorage.getItem(k)).manual === true, { timeout: 5000 }, KEY_USERS);
+    const manual = await openDropdown(page);
+    assert.deepEqual(await storedOrder(page, KEY_USERS), { ids: manual, manual: true });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#poll-col section.poll .response-name', { timeout: 30000 });
+    await sleep(500);
+    assert.deepEqual(await openDropdown(page), manual, 'hand-shuffled order applies while off');
+    await toggle(); // leave the setting on
     await popup.close();
   });
 
