@@ -1,10 +1,12 @@
 # Releasing to the Chrome Web Store
 
 Deployment is automated by [`.github/workflows/release.yml`](../.github/workflows/release.yml):
-every push to `main` (i.e. every merged pull request) runs the tests, and if
-that merge bumped `version` in `extension/manifest.json` the workflow also
-zips `extension/`, uploads the package to the Web Store and submits it for
-review. The zip is kept as a build artifact on the workflow run.
+when a pull request is merged into `main`, the workflow checks out the merge
+commit, runs the tests, asks the Web Store which version it currently holds
+(`scripts/cws-version.js`) and, if `extension/manifest.json` is newer, zips
+`extension/`, uploads the package and submits it for review. The zip is kept
+as a build artifact on the run. Direct pushes to `main` only run the tests,
+and pull requests from forks cannot deploy (GitHub withholds the secrets).
 
 ## One-time setup (≈10 minutes)
 
@@ -48,9 +50,10 @@ owning the developer listing, plus a refresh token for it.
    `package.json`) alongside the changes — the Web Store only accepts a
    version higher than the one it already has.
 2. Merge it. Watch *Actions → Deploy to Chrome Web Store*: the run logs
-   `manifest version X -> Y: deploying`, uploads and submits for review.
+   `store has X, manifest is Y: deploying`, uploads and submits for review.
 
-Merges that leave the version unchanged log `tests only, nothing uploaded`.
+If the manifest is not newer than the store's version, the run ends with a
+notice and nothing is uploaded.
 
 ### Manual runs / while a review is pending
 

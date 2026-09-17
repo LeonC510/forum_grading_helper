@@ -1,12 +1,17 @@
 name: Deploy to Chrome Web Store
 
-# Every push to main (i.e. every merged PR) runs the tests. If the merge
-# bumped "version" in extension/manifest.json, the extension is also zipped,
-# uploaded to the Chrome Web Store and submitted for review. A manual run
-# from the Actions tab always uploads (and publishes unless switched off —
+# Runs when a pull request is merged into main (direct pushes to main never
+# deploy). It checks out the merge commit, runs the tests, asks the Web Store
+# which version it currently holds, and — if the manifest is newer — zips
+# extension/, uploads it and submits it for review. A manual run from the
+# Actions tab does the same for the current main (with an optional publish,
 # handy while an earlier submission is still under review).
+#
+# Note: pull requests opened from forks do not receive repository secrets, so
+# deploys must come from branches in this repository.
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -17,6 +22,7 @@ on:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     env:
       EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
@@ -26,7 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # HEAD and its parent(s): needed to see the previous manifest
+          # The commit the merge produced on main (merge, squash or rebase).
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -34,18 +41,24 @@ jobs:
       - run: npm ci
       - run: npm test
 
-      - name: Did this merge bump the version?
+      - name: Check store credentials are configured
+        run: |
+          for v in EXTENSION_ID CLIENT_ID CLIENT_SECRET REFRESH_TOKEN; do
+            if [ -z "${!v}" ]; then echo "::error::Missing secret CWS_$v — see docs/RELEASING.md"; exit 1; fi
+          done
+
+      - name: Is the manifest newer than what the store has?
         id: version
         run: |
           CURRENT=$(node -p "require('./extension/manifest.json').version")
-          PREVIOUS=$(git show HEAD^:extension/manifest.json 2>/dev/null | node -p "try{JSON.parse(require('fs').readFileSync(0,'utf8')).version}catch(e){'none'}")
+          STORE=$(node scripts/cws-version.js)
           echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$CURRENT" != "$PREVIOUS" ]; then
+          if node -e "process.exit(require('./scripts/cws-version.js').isNewer('$CURRENT', '$STORE' === 'none' ? null : '$STORE') ? 0 : 1)"; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "manifest version $PREVIOUS -> $CURRENT: deploying"
+            echo "store has $STORE, manifest is $CURRENT: deploying"
           else
             echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "manifest version unchanged ($CURRENT): tests only, nothing uploaded"
+            echo "::notice::store already has $STORE and the manifest is $CURRENT — nothing to deploy (bump extension/manifest.json to release)"
           fi
 
       - name: Zip the extension
@@ -63,17 +76,10 @@ jobs:
           name: forum-grading-helper-${{ steps.version.outputs.version }}
           path: forum-grading-helper-${{ steps.version.outputs.version }}.zip
 
-      - name: Check store credentials are configured
-        if: steps.version.outputs.deploy == 'true'
-        run: |
-          for v in EXTENSION_ID CLIENT_ID CLIENT_SECRET REFRESH_TOKEN; do
-            if [ -z "${!v}" ]; then echo "::error::Missing secret CWS_$v — see docs/RELEASING.md"; exit 1; fi
-          done
-
       - name: Upload to the Chrome Web Store
         if: steps.version.outputs.deploy == 'true'
         run: npx --yes chrome-webstore-upload-cli@3 upload --source "forum-grading-helper-${{ steps.version.outputs.version }}.zip"
 
       - name: Submit for review (publish)
-        if: steps.version.outputs.deploy == 'true' && (github.event_name == 'push' || inputs.publish)
+        if: steps.version.outputs.deploy == 'true' && (github.event_name == 'pull_request' || inputs.publish)
         run: npx --yes chrome-webstore-upload-cli@3 publish

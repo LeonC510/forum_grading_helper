@@ -1,9 +1,11 @@
 name: CI
 
-# Tests on every pull request — the gate before merging to main.
-# (Pushes to main are tested by the deploy workflow.)
+# Tests on every pull request (the gate before merging) and on direct pushes
+# to main. Deploying happens only when a PR is merged — see release.yml.
 on:
   pull_request:
+  push:
+    branches: [main]
 
 jobs:
   test:

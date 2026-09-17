@@ -49,10 +49,12 @@ Requires Chrome 111+ (content scripts in the page's main world).
 
 ## Releasing
 
-Merging a pull request that bumps `version` in `extension/manifest.json`
-makes GitHub Actions upload the package to the Chrome Web Store and submit it
-for review; merges that don't change the version only run the tests. See
-[docs/RELEASING.md](docs/RELEASING.md) for the one-time credential setup.
+Merging a pull request into `main` makes GitHub Actions upload the package
+to the Chrome Web Store and submit it for review — provided `version` in
+`extension/manifest.json` is newer than what the store already holds
+(otherwise the merge only runs the tests). Direct pushes to `main` never
+deploy. See [docs/RELEASING.md](docs/RELEASING.md) for the one-time
+credential setup.
 
 ## Development
 
