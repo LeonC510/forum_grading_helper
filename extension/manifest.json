@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Forum Grading Helper",
-  "version": "0.5.1",
-  "description": "Better Forum grading experience. Randomized student order, default blind-grading, grading progress display, and auto-expanding text boxes.",
+  "version": "0.5.2",
+  "description": "Better Forum grading experience.",
   "minimum_chrome_version": "111",
   "action": {
     "default_title": "Forum Grading Helper",

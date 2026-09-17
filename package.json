@@ -1,8 +1,8 @@
 {
   "name": "forum-grading-helper",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
-  "description": "Better Forum grading experience. Randomized student order, default blind-grading, grading progress display, and auto-expanding text boxes.",
+  "description": "Better Forum grading experience.",
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "replay": "node test/replay/run.js"
