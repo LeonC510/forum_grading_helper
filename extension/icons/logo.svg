@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- hand-painted edges: slow, gentle wobble (no fuzz) -->
+    <filter id="paint" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <rect width="128" height="128" fill="#000"/>
+  <g filter="url(#paint)">
+    <!-- paper -->
+    <path d="M 10.0 99.5 L 24.0 96.4 L 48.0 95.6 L 76.0 95.8 L 100.0 96.3 L 118.0 98.6 L 118.0 99.2 L 100.0 101.4 L 76.0 102.6 L 48.0 102.4 L 24.0 101.6 L 10.0 100.4 Z" fill="#fff"/>
+    <!-- pen body -->
+    <path d="M 41.0 95.0 L 42.8 89.4 L 44.5 82.6 L 46.2 76.9 L 52.2 68.9 L 66.5 51.2 L 81.1 33.8 L 90.4 23.8 L 95.1 21.8 L 99.0 25.0 L 102.9 28.2 L 101.8 33.2 L 93.7 44.2 L 79.3 61.8 L 64.6 79.1 L 57.9 86.5 L 52.5 89.2 L 46.2 92.2 L 41.0 95.0 Z" fill="#fff"/>
+    <!-- nib slit -->
+    <path d="M 41.9 94.0 L 50.9 83.1" stroke="#000" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    <!-- cap band -->
+    <path d="M 78.1 36.1 L 80.5 33.3 L 94.3 44.7 L 92.0 47.5 Z" fill="#000"/>
+    <!-- dry-brush streaks in the body -->
+    <g stroke="#000" stroke-linecap="round" fill="none" opacity="0.45">
+      <path d="M 55.2 71.3 L 79.5 41.9" stroke-width="0.9"/>
+      <path d="M 57.6 73.4 L 82.0 44.0" stroke-width="0.6"/>
+      <path d="M 61.0 76.2 L 85.4 46.8" stroke-width="1.1"/>
+    </g>
+  </g>
+</svg>

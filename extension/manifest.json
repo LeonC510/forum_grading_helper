@@ -1,12 +1,27 @@
 {
   "manifest_version": 3,
   "name": "Forum Grading Helper",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Better Forum grading experience.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "minimum_chrome_version": "111",
+  "permissions": [
+    "storage"
+  ],
   "action": {
     "default_title": "Forum Grading Helper",
-    "default_popup": "popup/popup.html"
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "content_scripts": [
     {
@@ -53,8 +68,5 @@
       "run_at": "document_start",
       "world": "MAIN"
     }
-  ],
-  "permissions": [
-    "storage"
   ]
 }

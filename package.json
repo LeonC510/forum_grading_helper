@@ -1,11 +1,12 @@
 {
   "name": "forum-grading-helper",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
   "description": "Better Forum grading experience.",
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "replay": "node test/replay/run.js"
+    "replay": "node test/replay/run.js",
+    "icons": "node scripts/render-icons.js"
   },
   "devDependencies": {
     "@reduxjs/toolkit": "^2.12.0",
