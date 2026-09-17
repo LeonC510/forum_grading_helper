@@ -64,7 +64,10 @@
     try { const st = s.getState(); return !!(st && st.user && st.user.data); } catch (e) { return false; }
   }
   hook.onStore(function (s) {
-    if (!store || (!isGraderStore(store) && isGraderStore(s))) store = s;
+    if (!store || (!isGraderStore(store) && isGraderStore(s))) {
+      store = s;
+      store.subscribe(refreshProgress);
+    }
   });
 
   function sliceIds(state, name) {
@@ -91,6 +94,58 @@
     reorder();
   }
 
+  // ------------------------------------------------------------ progress line
+
+  function hasScore(a) { return a && a.score !== null && a.score !== undefined; }
+
+  // Students: has ≥1 assessment with a numerical score anywhere in this class
+  // session (Forum's own per-student "scores" count in the dropdown uses the
+  // same rule). Groups: same, for the groups the selector currently lists.
+  function computeProgress(state, isGroupSelector) {
+    const oa = state.outcomeAssessment && state.outcomeAssessment.data && state.outcomeAssessment.data.entities;
+    const assessments = oa ? Object.keys(oa).map(function (k) { return oa[k]; }) : [];
+    let ids;
+    let targetKey;
+    if (!isGroupSelector) {
+      ids = sliceIds(state, 'user');
+      targetKey = 'target_user_id';
+    } else {
+      const breakoutId = state.filter && state.filter.currentBreakoutId;
+      if (breakoutId) {
+        const bg = state.breakoutGroup && state.breakoutGroup.data;
+        ids = bg ? bg.ids.filter(function (id) { return bg.entities[id] && bg.entities[id].breakout_id === breakoutId; }) : [];
+        targetKey = 'target_breakout_group_id';
+      } else {
+        ids = sliceIds(state, 'assignmentGroup');
+        targetKey = 'target_assignment_group_id';
+      }
+    }
+    const graded = new Set();
+    for (const a of assessments) if (hasScore(a) && a[targetKey] != null) graded.add(String(a[targetKey]));
+    let count = 0;
+    for (const id of ids) if (graded.has(String(id))) count++;
+    return { graded: count, total: ids.length };
+  }
+
+  function progressEnabled() {
+    return root.document.documentElement.dataset.fghShowProgress !== '0';
+  }
+
+  let lastProgress = null; // { state, isGroup, result } — most actions leave state untouched
+  function refreshProgress() {
+    const doc = root.document;
+    const sel = doc.getElementById('student-selector');
+    if (!sel || !store) return;
+    if (!progressEnabled()) { FGH.removeProgress(sel); return; }
+    const state = store.getState();
+    const isGroup = !!sel.querySelector('.group-name');
+    if (!lastProgress || lastProgress.state !== state || lastProgress.isGroup !== isGroup) {
+      lastProgress = { state: state, isGroup: isGroup, result: computeProgress(state, isGroup) };
+    }
+    const p = lastProgress.result;
+    FGH.renderProgress(doc, sel, { graded: p.graded, total: p.total, className: 'body-s text-black-tint-70 pl4 pr4 mt2' });
+  }
+
   // Add "Shuffle Order" to the right of the "Who" heading that precedes
   // #student-selector. The heading is React-managed but React only owns its
   // text node, so an appended button survives re-renders; if the heading is
@@ -99,6 +154,7 @@
     const doc = root.document;
     const sel = doc.getElementById('student-selector');
     if (!sel) return;
+    refreshProgress();
     const h2 = sel.previousElementSibling;
     if (!h2 || h2.tagName !== 'H2' || h2.querySelector('.fgh-shuffle') || h2.textContent.trim() !== 'Who') return;
     if (!store) {
@@ -112,9 +168,15 @@
     }));
   }
 
+  // Comment boxes grow with their text (polls, video, workbooks).
+  const sweepTextareas = FGH.installAutosize(root.document, { selector: 'textarea' });
+
   function observe() {
-    new root.MutationObserver(inject).observe(root.document.documentElement, { childList: true, subtree: true });
+    new root.MutationObserver(function () { inject(); sweepTextareas(); }).observe(root.document.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress'],
+    });
     inject();
+    sweepTextareas();
   }
   if (root.document.documentElement) observe();
   else root.document.addEventListener('DOMContentLoaded', observe, { once: true });

@@ -152,6 +152,8 @@
       }
     }
 
+    renderAssignmentProgress(sel);
+
     const h2 = sel.previousElementSibling;
     if (!h2 || h2.tagName !== 'H2' || h2.querySelector('.fgh-shuffle') || h2.textContent.trim() !== 'Who') return;
     h2.appendChild(FGH.makeShuffleButton(doc, {
@@ -166,14 +168,46 @@
     }));
   }
 
+  // "N/M graded (P%)" under Prev/Next. A gradee counts as graded when Forum's
+  // list shows a scores count for them (assessments attached to an outcome,
+  // which in this editor always carry a score; comment-only feedback has no
+  // outcome and is not counted). The panel re-renders on every assessment
+  // change, so re-running this on each tick keeps it live.
+  function renderAssignmentProgress(sel) {
+    const nav = sel.nextElementSibling && sel.nextElementSibling.classList.contains('adjacent-submissions') ? sel.nextElementSibling : null;
+    if (!nav) return;
+    if (doc.documentElement.dataset.fghShowProgress === '0') {
+      FGH.removeProgress(nav);
+      if (nav.dataset.fghMb) { nav.classList.replace('mb2', 'mb6'); delete nav.dataset.fghMb; }
+      return;
+    }
+    const items = gradeeItems(sel);
+    let graded = 0;
+    for (const el of items) {
+      const n = el.querySelector('.num-scores');
+      if (n && parseInt(n.textContent, 10) > 0) graded++;
+    }
+    // Keep Forum's spacing: the buttons' bottom margin moves to our line.
+    if (!nav.dataset.fghMb && nav.classList.contains('mb6')) { nav.classList.replace('mb6', 'mb2'); nav.dataset.fghMb = '1'; }
+    FGH.renderProgress(doc, nav, { graded: graded, total: items.length, className: 'text-black-tint-70 mb6' });
+  }
+
   // ------------------------------------------------------------------- wiring
+
+  // Comment boxes in the assignment grader grow with their text. The workbook
+  // annotator widget brings its own editor styling and is left alone.
+  const sweepTextareas = FGH.installAutosize(doc, {
+    selector: 'textarea',
+    exclude: '.annotator-editor',
+    enabled: function () { resolveRoute(); return !!route && route.name === 'assignmentGrader'; },
+  });
 
   function tick() {
     resolveRoute();
     if (!route) return;
     if (route.name === 'classEntrance') applyClassEntrance(route.m);
     else if (route.name === 'assignmentEntrance') applyAssignmentEntrance(route.m);
-    else if (route.name === 'assignmentGrader') applyAssignmentGrader(route.m);
+    else if (route.name === 'assignmentGrader') { applyAssignmentGrader(route.m); sweepTextareas(); }
   }
 
   // Capture at document level: runs before React's root listener and before
@@ -201,7 +235,9 @@
   }, true);
 
   function observe() {
-    new root.MutationObserver(tick).observe(doc.documentElement, { childList: true, subtree: true });
+    new root.MutationObserver(tick).observe(doc.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress'],
+    });
     tick();
   }
   if (doc.documentElement) observe();

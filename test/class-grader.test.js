@@ -42,10 +42,10 @@ before(() => {
     initialState: { data: adapter.getInitialState(), loading: false, error: null },
     reducers: { upsertMany: (s, a) => { adapter.upsertMany(s.data, a.payload); } },
   });
-  slices = { user: mk('user', userAdapter), assignmentGroup: mk('assignmentGroup', plain), breakoutGroup: mk('breakoutGroup', plain) };
-  const filter = rtk.createSlice({ name: 'filter', initialState: { selectedUserId: null }, reducers: {} });
+  slices = { user: mk('user', userAdapter), assignmentGroup: mk('assignmentGroup', plain), breakoutGroup: mk('breakoutGroup', plain), outcomeAssessment: mk('outcomeAssessment', plain) };
+  slices.filter = rtk.createSlice({ name: 'filter', initialState: { selectedUserId: null, currentBreakoutId: null }, reducers: { setFilterValue: (s, a) => { s[a.payload.name] = a.payload.value; } } });
   store = rtk.configureStore({
-    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer, filter: filter.reducer }),
+    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer, outcomeAssessment: slices.outcomeAssessment.reducer, filter: slices.filter.reducer }),
     middleware: (g) => g({ immutableCheck: false, serializableCheck: false }),
   });
 });
@@ -149,3 +149,91 @@ test('a stored order is applied on a later load instead of a fresh shuffle', () 
   s2.dispatch(slices.user.actions.upsertMany(users));
   assert.deepEqual(plain(s2.getState().user.data.ids).map(String), stored);
 });
+
+// ------------------------------------------------------------ progress line
+
+const progressEl = () => win.document.querySelector('#student-selector + .fgh-progress');
+
+test('progress line appears under Prev/Next: students with a numerical score / all students', async () => {
+  win.document.querySelector('.entry-filters').innerHTML = STUDENT_SIDEBAR;
+  store.dispatch(slices.outcomeAssessment.actions.upsertMany([
+    { id: 1, target_user_id: 100, score: 4, type: 'poll' },
+    { id: 2, target_user_id: 100, score: 3, type: 'video' },        // same student twice: counts once
+    { id: 3, target_user_id: 101, score: 0, type: 'poll' },         // 0 is a score
+    { id: 4, target_user_id: 102, score: null, comment: 'nice' },   // comment only: not graded
+    { id: 5, target_user_id: 9999, score: 5 },                      // not in the list: ignored
+  ]));
+  await tick();
+  const el = progressEl();
+  assert.ok(el, 'inserted right after #student-selector');
+  assert.equal(el.textContent, '2/12 graded (17%)');
+  assert.ok(el.classList.contains('text-black-tint-70') && el.classList.contains('body-s') && el.classList.contains('pl4'), 'plain sidebar text style');
+  assert.equal(win.document.querySelectorAll('.fgh-progress').length, 1);
+});
+
+test('progress line updates live when a score is saved', async () => {
+  store.dispatch(slices.outcomeAssessment.actions.upsertMany([{ id: 6, target_user_id: 103, score: 2 }]));
+  assert.equal(progressEl().textContent, '3/12 graded (25%)');
+  store.dispatch(slices.outcomeAssessment.actions.upsertMany([{ id: 6, target_user_id: 103, score: null }]));
+  assert.equal(progressEl().textContent, '2/12 graded (17%)');
+});
+
+test('the popup setting hides and re-shows the line', async () => {
+  win.document.documentElement.dataset.fghShowProgress = '0';
+  await tick();
+  assert.equal(progressEl(), null);
+  store.dispatch(slices.outcomeAssessment.actions.upsertMany([{ id: 7, target_user_id: 104, score: 1 }]));
+  assert.equal(progressEl(), null, 'stays hidden while off');
+  win.document.documentElement.dataset.fghShowProgress = '1';
+  await tick();
+  assert.equal(progressEl().textContent, '3/12 graded (25%)');
+});
+
+test('group selector: groups with a score / groups shown (assignment groups, or the current breakout\'s groups)', async () => {
+  win.document.querySelector('.entry-filters').innerHTML = GROUP_SIDEBAR;
+  store.dispatch(slices.outcomeAssessment.actions.upsertMany([
+    { id: 8, target_assignment_group_id: 2, score: 3 },
+    { id: 9, target_breakout_group_id: 8, score: 4 },
+  ]));
+  await tick();
+  assert.equal(progressEl().textContent, '1/6 graded (17%)');
+  store.dispatch(slices.breakoutGroup.actions.upsertMany([{ id: 7, breakout_id: 5 }, { id: 8, breakout_id: 5 }, { id: 9, breakout_id: 6 }]));
+  store.dispatch(slices.filter.actions.setFilterValue({ name: 'currentBreakoutId', value: 5 }));
+  assert.equal(progressEl().textContent, '1/2 graded (50%)');
+  store.dispatch(slices.filter.actions.setFilterValue({ name: 'currentBreakoutId', value: null }));
+  assert.equal(progressEl().textContent, '1/6 graded (17%)');
+});
+
+test('progress line is re-created when the sidebar re-renders', async () => {
+  const filters = win.document.querySelector('.entry-filters');
+  filters.innerHTML = '';
+  await tick();
+  filters.innerHTML = STUDENT_SIDEBAR;
+  await tick();
+  assert.equal(progressEl().textContent, '3/12 graded (25%)');
+  assert.equal(win.document.querySelectorAll('.fgh-progress').length, 1);
+});
+
+// ------------------------------------------------------- comment textareas
+
+function addTextarea(container, initialScroll) {
+  container.insertAdjacentHTML('beforeend', '<div class="response-comment"><textarea placeholder="Your comment"></textarea></div>');
+  const ta = container.querySelector('textarea:last-of-type');
+  let h = initialScroll;
+  Object.defineProperty(ta, 'scrollHeight', { get: () => h });
+  return { ta, setScroll: (v) => { h = v; } };
+}
+
+test('comment textareas grow to fit their text when they appear and while typing', async () => {
+  const col = win.document.createElement('section');
+  col.id = 'col-right';
+  win.document.body.appendChild(col);
+  const { ta, setScroll } = addTextarea(col, 90);
+  await tick();
+  assert.equal(ta.dataset.fghAutosize, '1');
+  assert.equal(ta.style.height, '90px');
+  setScroll(150);
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.equal(ta.style.height, '150px');
+});
+

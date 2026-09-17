@@ -91,3 +91,61 @@ test('storage.get tolerates a missing localStorage', () => {
   assert.equal(FGH.storage.get('fgh:x'), null);
   assert.doesNotThrow(() => FGH.storage.set('fgh:x', [1]));
 });
+
+test('progressText formats "graded/total graded (percent)" with a rounded percent', () => {
+  assert.equal(FGH.progressText(13, 15), '13/15 graded (87%)');
+  assert.equal(FGH.progressText(0, 18), '0/18 graded (0%)');
+  assert.equal(FGH.progressText(18, 18), '18/18 graded (100%)');
+  assert.equal(FGH.progressText(0, 0), '0/0 graded (0%)');
+});
+
+test('renderProgress creates the line once, then updates it in place', () => {
+  const { JSDOM } = require('jsdom');
+  const doc = new JSDOM('<div id="sidebar"><div id="student-selector"></div><hr></div>').window.document;
+  const anchor = doc.getElementById('student-selector');
+  const el = FGH.renderProgress(doc, anchor, { graded: 3, total: 10, className: 'pl4' });
+  assert.equal(el.className, 'fgh-progress pl4');
+  assert.equal(el.textContent, '3/10 graded (30%)');
+  assert.equal(anchor.nextElementSibling, el, 'inserted right after the anchor');
+  const again = FGH.renderProgress(doc, anchor, { graded: 4, total: 10, className: 'pl4' });
+  assert.equal(again, el);
+  assert.equal(el.textContent, '4/10 graded (40%)');
+  assert.equal(doc.querySelectorAll('.fgh-progress').length, 1);
+  FGH.removeProgress(anchor);
+  assert.equal(doc.querySelector('.fgh-progress'), null);
+});
+
+test('autosize grows a textarea to its content height (border-box aware) and marks it', () => {
+  const { JSDOM } = require('jsdom');
+  const win = new JSDOM('<textarea rows="2"></textarea>').window;
+  const ta = win.document.querySelector('textarea');
+  let content = 120;
+  Object.defineProperty(ta, 'scrollHeight', { get: () => content });
+  // jsdom has no layout: stub the computed style the way a browser reports it.
+  const fakeWin = { getComputedStyle: () => ({ boxSizing: 'border-box', borderTopWidth: '1px', borderBottomWidth: '1px' }) };
+  FGH.autosize(ta, fakeWin);
+  assert.equal(ta.style.height, '122px');
+  assert.equal(ta.dataset.fghAutosize, '1');
+  content = 60;
+  FGH.autosize(ta, fakeWin);
+  assert.equal(ta.style.height, '62px', 'shrinks too (height reset before measuring)');
+  FGH.autosize(ta, { getComputedStyle: () => ({ boxSizing: 'content-box', borderTopWidth: '1px', borderBottomWidth: '1px', paddingTop: '8px', paddingBottom: '8px' }) });
+  assert.equal(ta.style.height, '44px', 'content-box: height excludes padding and borders');
+});
+
+test('autosize never shrinks a textarea below the height Forum gave it', () => {
+  const { JSDOM } = require('jsdom');
+  const win = new JSDOM('<textarea></textarea>').window;
+  const ta = win.document.querySelector('textarea');
+  let content = 30;
+  Object.defineProperty(ta, 'scrollHeight', { get: () => content });
+  const fakeWin = { getComputedStyle: () => ({ boxSizing: 'border-box', borderTopWidth: '1px', borderBottomWidth: '1px', height: '70px' }) };
+  FGH.autosize(ta, fakeWin); // first call records the 70px base
+  assert.equal(ta.style.height, '70px');
+  content = 200;
+  FGH.autosize(ta, fakeWin);
+  assert.equal(ta.style.height, '202px');
+  content = 30;
+  FGH.autosize(ta, { getComputedStyle: () => ({ boxSizing: 'border-box', borderTopWidth: '1px', borderBottomWidth: '1px', height: '202px' }) });
+  assert.equal(ta.style.height, '70px', 'base is the original height, not our own inline one');
+});

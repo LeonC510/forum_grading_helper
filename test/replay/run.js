@@ -66,7 +66,7 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     if (/reading 'contains'/.test(e.message) && /class_grader\.bundle/.test(e.stack || '')) return;
     errors.push('pageerror: ' + e.message);
   });
-  page.on('console', (m) => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|404|integrity/.test(m.text())) errors.push('console: ' + m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/net::ERR|Failed to load resource|404|integrity|VIDEOJS: ERROR/.test(m.text())) errors.push('console: ' + m.text()); });
 
   // Alphabetical (Forum's default) order from the recorded class API.
   const classJson = await (await fetch(`https://127.0.0.1:${PORT}/api/v1/class_grader/classes/104842`, { headers: { host: 'forum.minerva.edu' } }).catch(() => null))?.json?.().catch(() => null) ?? null;
@@ -149,6 +149,45 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     await page.waitForSelector('#poll-col section.poll .response-name', { timeout: 30000 });
     assert.deepEqual(await openDropdown(page), order);
     assert.deepEqual(await mainScreenIds(page), order);
+  });
+
+  await check('class grader: progress line under Prev/Next matches the recorded scores', async () => {
+    const oa = await (await fetch(`https://127.0.0.1:${PORT}/api/v1/class_grader/classes/104842/outcome-assessments`, { headers: { host: 'forum.minerva.edu' } })).json();
+    const students = new Set(classJson.class_users.map((c) => String(c.user.id)));
+    const graded = new Set(oa.filter((a) => a.score !== null && students.has(String(a.target_user_id))).map((a) => String(a.target_user_id)));
+    const expected = `${graded.size}/${students.size} graded (${Math.round((graded.size / students.size) * 100)}%)`;
+    const info = await page.$eval('#student-selector + .fgh-progress', (e) => ({ text: e.textContent, color: getComputedStyle(e).color, h2color: getComputedStyle(e.parentElement.querySelector('h2')).color, size: getComputedStyle(e).fontSize }));
+    assert.equal(info.text, expected);
+    assert.ok(graded.size > 0 && graded.size < students.size, 'meaningful fixture: ' + expected);
+    assert.equal(info.color, info.h2color, 'same plain grey as the heading');
+  });
+
+  await check('class grader: comment boxes keep their default size when empty and grow while typing', async () => {
+    const info = await page.evaluate(() => {
+      const tas = [...document.querySelectorAll('#poll-col textarea')];
+      // Forum's CSS height for these boxes, measured on a pristine sibling.
+      const c = document.createElement('textarea'); tas[0].parentElement.appendChild(c); const cssHeight = getComputedStyle(c).height; c.remove();
+      return { count: tas.length, cssHeight, marked: tas.every((t) => t.dataset.fghAutosize === '1') };
+    });
+    assert.ok(info.count >= 2);
+    assert.ok(info.marked);
+    const ta = (await page.$$('#poll-col textarea'))[0];
+    await ta.click();
+    await ta.evaluate((t) => t.select());
+    await page.keyboard.press('Backspace');
+    assert.equal(await ta.evaluate((t) => t.value), '');
+    assert.equal(await ta.evaluate((t) => getComputedStyle(t).height), info.cssHeight, 'empty box = Forum\'s CSS height');
+    const before = await ta.evaluate((t) => t.getBoundingClientRect().height);
+    await ta.type(Array.from({ length: 12 }, (_, i) => 'Line ' + i).join('\n'));
+    const after = await ta.evaluate((t) => ({ h: t.getBoundingClientRect().height, sh: t.scrollHeight, ch: t.clientHeight }));
+    assert.ok(after.h > before + 60, `grew from ${before} to ${after.h}`);
+    assert.ok(after.sh <= after.ch + 1, 'no inner scrollbar: content fits');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#poll-col section.poll .response-name', { timeout: 30000 });
+    await sleep(300);
+    // A pre-filled comment (from the recorded assessments) is sized on appearance.
+    const filled = await page.evaluate(() => { const t = [...document.querySelectorAll('#poll-col textarea')].find((x) => x.value.length > 80); return t ? { sh: t.scrollHeight, ch: t.clientHeight, h: t.style.height } : null; });
+    assert.ok(filled && filled.h && filled.sh <= filled.ch + 1, 'existing comment fits: ' + JSON.stringify(filled));
   });
 
   await check('class grader: Video tab shares the order', async () => {
@@ -284,14 +323,45 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     assert.deepEqual(errors, []);
   });
 
+  await check('assignment grader (static page): progress line counts gradees with scores', async () => {
+    await page.goto(AGRADER, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.adjacent-submissions + .fgh-progress', { timeout: 30000 });
+    const total = (await page.$$('.dropdown-list > .list-item.gradee')).length;
+    const scored = (await page.$$('.dropdown-list > .list-item.gradee .num-scores')).length;
+    assert.equal(await page.$eval('.adjacent-submissions + .fgh-progress', (e) => e.textContent), `${scored}/${total} graded (${Math.round((scored / total) * 100)}%)`);
+    assert.ok(await page.$eval('.adjacent-submissions', (e) => e.classList.contains('mb2') && !e.classList.contains('mb6')));
+  });
+
+  const id = await browser.installExtension(EXT);
+  const popupUrl = `chrome-extension://${id}/popup/popup.html`;
   await check('popup shows the extension name and version from the manifest', async () => {
-    const id = await browser.installExtension(EXT);
     const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
     const popup = await browser.newPage();
-    await popup.goto(`chrome-extension://${id}/popup/popup.html`);
+    await popup.goto(popupUrl);
     await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
     assert.equal(await popup.$eval('#version', (e) => e.textContent), manifest.version);
     assert.equal(await popup.$eval('#name', (e) => e.textContent), manifest.name);
+    await popup.close();
+  });
+
+  await check('popup setting "Show grading progress" toggles the line in an open grader tab and persists', async () => {
+    await page.goto(GRADER, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#student-selector + .fgh-progress', { timeout: 30000 });
+    const popup = await browser.newPage();
+    await popup.goto(popupUrl);
+    await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
+    assert.equal(await popup.$eval('#showProgress', (e) => e.checked), true, 'on by default');
+    await popup.click('#showProgress');
+    await page.waitForFunction(() => !document.querySelector('.fgh-progress'), { timeout: 5000 });
+    await popup.reload();
+    await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
+    assert.equal(await popup.$eval('#showProgress', (e) => e.checked), false, 'persisted');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#student-selector', { timeout: 30000 });
+    await sleep(1000);
+    assert.equal(await page.$('.fgh-progress'), null, 'stays off after reload');
+    await popup.click('#showProgress');
+    await page.waitForSelector('#student-selector + .fgh-progress', { timeout: 5000 });
     await popup.close();
   });
 

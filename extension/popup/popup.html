@@ -9,6 +9,8 @@
     .version { color: #666; }
     ul { margin: 10px 0 0; padding-left: 16px; color: #444; }
     li { margin: 2px 0; }
+    h2 { margin: 12px 0 4px; font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: .02em; }
+    .setting { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -18,7 +20,11 @@
   <ul>
     <li>Random student order in grading pages (no more jumping around the page to ensure fairness!)</li>
     <li>Blind grading by default (no more covering student names before turning on blind grading!)</li>
+    <li>Grading progress under Prev/Next (students with a score / all students)</li>
+    <li>Comment boxes grow with your text</li>
   </ul>
+  <h2>Settings</h2>
+  <label class="setting"><input type="checkbox" id="showProgress"> Show grading progress</label>
   <script src="popup.js"></script>
 </body>
 </html>

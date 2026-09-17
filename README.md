@@ -15,6 +15,11 @@ Chrome extension (Manifest V3) for professors and TAs grading on
   Class* and opens the grader with `?blind=true`; on the assignment page only
   *Blind Grade Assignment* remains, styled as the primary button. Pages where
   you are a student (no *Assess Class* button) are left untouched.
+* **Grading progress** under Prev/Next, e.g. `9/18 graded (50%)`: a student
+  counts as graded once they have a numerical score anywhere in the class
+  session (comments alone don't count); in the assignment grader, once an
+  outcome score is attached. Can be switched off in the popup.
+* **Comment boxes grow with your text** (never smaller than Forum's default).
 
 ## Install (unpacked)
 
@@ -34,9 +39,13 @@ Requires Chrome 111+ (content scripts in the page's main world).
   separate React/Redux-Toolkit app. We install a store enhancer through the
   `__REDUX_DEVTOOLS_EXTENSION_COMPOSE__` hook RTK consults, and re-order the
   `user` entity ids there; every student list in that app derives from it.
-* `extension/src/order.js` — shuffle / merge / storage helpers.
-* Storage: `localStorage` on forum.minerva.edu under `fgh:order:*` keys.
-  No extension permissions are requested.
+* `extension/src/order.js` — shuffle / merge / storage / progress / autosize helpers.
+* `extension/src/settings.js` — mirrors the popup's settings
+  (`chrome.storage.local`, the only permission) onto `<html data-fgh-…>` so
+  both worlds read them synchronously.
+* Storage: student/group order lives in `localStorage` on forum.minerva.edu
+  under `fgh:order:*` keys (the page's own storage, no permission needed);
+  popup settings live in `chrome.storage.local`.
 
 ## Development
 

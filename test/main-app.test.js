@@ -281,3 +281,94 @@ test('assignment grader: group assignments keep the default order until Shuffle 
   doc.querySelector('.next-button').click();
   assert.equal(log[log.length - 1], 'select:' + order[(order.indexOf('10893') + 1) % order.length]);
 });
+
+// ------------------------------------------------------------ progress line
+
+const aProgress = () => doc.querySelector('.adjacent-submissions + .fgh-progress');
+function markScored(ids) {
+  for (const id of ids) {
+    const item = doc.querySelector(`.list-item.gradee[data-gradee-id="${id}"] .scores`);
+    item.innerHTML = '<div title="Number of grades" class="mr1"><span class="num-scores">2</span></div>';
+  }
+}
+
+test('assignment grader: progress line below Prev/Next counts gradees with a score', async () => {
+  delete doc.documentElement.dataset.fghShowProgress;
+  goto('/app/assignment-grader/2491635/users/10893?blind=true');
+  mountWhoPanel('10893', []);
+  markScored(['10893', '12898']);
+  await tick();
+  const el = aProgress();
+  assert.ok(el);
+  assert.equal(el.textContent, '2/5 graded (40%)');
+  assert.ok(el.classList.contains('text-black-tint-70'), 'plain sidebar text');
+  const nav = doc.querySelector('.adjacent-submissions');
+  assert.ok(!nav.classList.contains('mb6') && nav.classList.contains('mb2'), 'buttons keep their spacing to the line');
+  assert.ok(el.classList.contains('mb6'), '…and the line takes over the bottom margin');
+  assert.equal(doc.querySelectorAll('.fgh-progress').length, 1);
+});
+
+test('assignment grader: the line is rebuilt from the fresh list on every panel re-render', async () => {
+  goto('/app/assignment-grader/2491635/users/10893?blind=true');
+  mountWhoPanel('10893', []);
+  markScored(['10893']);
+  await tick();
+  assert.equal(aProgress().textContent, '1/5 graded (20%)');
+  mountWhoPanel('12898', []);
+  markScored(['10893', '12898', '12915']);
+  await tick();
+  assert.equal(aProgress().textContent, '3/5 graded (60%)');
+  assert.equal(doc.querySelectorAll('.fgh-progress').length, 1);
+});
+
+test('assignment grader: the popup setting hides the line and restores the original spacing', async () => {
+  goto('/app/assignment-grader/2491635/users/12898?blind=true');
+  mountWhoPanel('12898', []);
+  markScored(['10893', '12898', '12915']);
+  await tick();
+  assert.equal(aProgress().textContent, '3/5 graded (60%)');
+  doc.documentElement.dataset.fghShowProgress = '0';
+  await tick();
+  assert.equal(aProgress(), null);
+  assert.ok(doc.querySelector('.adjacent-submissions').classList.contains('mb6'));
+  doc.documentElement.dataset.fghShowProgress = '1';
+  await tick();
+  assert.equal(aProgress().textContent, '3/5 graded (60%)');
+});
+
+// ------------------------------------------------------- comment textareas
+
+function addCommentBox(scroll) {
+  doc.querySelector('.main-region').insertAdjacentHTML('beforeend', '<div class="outcome-assessment-editor-view"><textarea id="comment" class="textarea"></textarea></div><div class="annotator-editor"><div class="annotator-item"><textarea id="ann"></textarea></div></div>');
+  for (const id of ['comment', 'ann']) {
+    let h = scroll;
+    const ta = doc.getElementById(id);
+    Object.defineProperty(ta, 'scrollHeight', { get: () => h });
+    ta._setScroll = (v) => { h = v; };
+  }
+}
+
+test('assignment grader: the comment box grows with its text; the annotator widget is left alone', async () => {
+  goto('/app/assignment-grader/2491635/users/10893?blind=true');
+  mountWhoPanel('10893', []);
+  addCommentBox(80);
+  await tick();
+  const ta = doc.getElementById('comment');
+  assert.equal(ta.style.height, '80px');
+  ta._setScroll(140);
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.equal(ta.style.height, '140px');
+  assert.equal(doc.getElementById('ann').style.height, '');
+});
+
+test('textareas on other pages are not touched, even while typing', async () => {
+  goto('/app/classes/104842');
+  addCommentBox(80);
+  await tick();
+  const ta = doc.getElementById('comment');
+  assert.equal(ta.style.height, '');
+  ta._setScroll(140);
+  ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.equal(ta.style.height, '');
+});
+

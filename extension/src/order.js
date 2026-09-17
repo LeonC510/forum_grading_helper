@@ -94,7 +94,65 @@
     return btn;
   }
 
-  const FGH = { shuffle, mergeOrder, storage, randomInt, makeShuffleButton };
+  // "13/15 graded (87%)"
+  function progressText(graded, total) {
+    const pct = total ? Math.round((graded / total) * 100) : 0;
+    return graded + '/' + total + ' graded (' + pct + '%)';
+  }
+
+  // Insert (or update) the progress line right after `anchor`.
+  function renderProgress(doc, anchor, opts) {
+    let el = anchor.nextElementSibling;
+    if (!el || !el.classList.contains('fgh-progress')) {
+      el = doc.createElement('div');
+      el.className = 'fgh-progress' + (opts.className ? ' ' + opts.className : '');
+      anchor.insertAdjacentElement('afterend', el);
+    }
+    const text = progressText(opts.graded, opts.total);
+    if (el.textContent !== text) el.textContent = text;
+    return el;
+  }
+
+  function removeProgress(anchor) {
+    const el = anchor.nextElementSibling;
+    if (el && el.classList.contains('fgh-progress')) el.remove();
+  }
+
+  // Grow/shrink a textarea to fit its content, never below the height Forum's
+  // CSS gave it (recorded on first sight, before we set any inline height).
+  // The inline height is reset before measuring so the result reflects the
+  // current text; scrollHeight is content + padding, so padding/borders are
+  // adjusted per box-sizing.
+  function autosize(ta, win) {
+    const view = win || ta.ownerDocument.defaultView;
+    let cs = view.getComputedStyle(ta);
+    if (!ta.dataset.fghAutosize) {
+      ta.dataset.fghAutosize = '1';
+      ta.dataset.fghBaseHeight = String(parseFloat(cs.height) || 0);
+    }
+    const px = function (v) { return parseFloat(v) || 0; };
+    ta.style.height = 'auto';
+    cs = view.getComputedStyle(ta);
+    let h = ta.scrollHeight;
+    if (cs.boxSizing === 'border-box') h += px(cs.borderTopWidth) + px(cs.borderBottomWidth);
+    else h -= px(cs.paddingTop) + px(cs.paddingBottom);
+    ta.style.height = Math.max(h, px(ta.dataset.fghBaseHeight)) + 'px';
+  }
+
+  // Keep every matching textarea under `root` sized to its text: once when it
+  // shows up (existing comments) and on every keystroke.
+  function installAutosize(doc, opts) {
+    const selector = opts.selector || 'textarea';
+    const exclude = opts.exclude || null;
+    const enabled = opts.enabled || function () { return true; };
+    const wanted = function (el) { return enabled() && el && el.tagName === 'TEXTAREA' && el.matches(selector) && !(exclude && el.closest(exclude)); };
+    doc.addEventListener('input', function (e) { if (wanted(e.target)) autosize(e.target); }, true);
+    return function sweep() {
+      for (const ta of doc.querySelectorAll(selector + ':not([data-fgh-autosize])')) if (wanted(ta)) autosize(ta);
+    };
+  }
+
+  const FGH = { shuffle, mergeOrder, storage, randomInt, makeShuffleButton, progressText, renderProgress, removeProgress, autosize, installAutosize };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = FGH;
   else root.__forumGradingHelper = FGH;
