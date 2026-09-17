@@ -47,6 +47,15 @@ Requires Chrome 111+ (content scripts in the page's main world).
   under `fgh:order:*` keys (the page's own storage, no permission needed);
   popup settings live in `chrome.storage.local`.
 
+## Releasing
+
+Merging a pull request into `main` makes GitHub Actions upload the package
+to the Chrome Web Store and submit it for review — provided `version` in
+`extension/manifest.json` is newer than what the store already holds
+(otherwise the merge only runs the tests). Direct pushes to `main` never
+deploy. See [docs/RELEASING.md](docs/RELEASING.md) for the one-time
+credential setup.
+
 ## Development
 
 ```sh
