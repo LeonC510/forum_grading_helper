@@ -1,0 +1,66 @@
+name: Release to Chrome Web Store
+
+# Push a tag that matches extension/manifest.json (e.g. v0.5.5) to build,
+# upload and submit for review. Or run it by hand from the Actions tab.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Submit for review after uploading (off = upload only, e.g. while a review is pending)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+      CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+      - name: Check the tag matches manifest.json
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then TAG="${GITHUB_REF}"; else TAG="v$(node -p "require('./extension/manifest.json').version")"; fi
+          echo "version=$(node scripts/check-version.js "$TAG")" >> "$GITHUB_OUTPUT"
+
+      - name: Zip the extension
+        run: |
+          cd extension
+          zip -r "../forum-grading-helper-${{ steps.version.outputs.version }}.zip" . -x '.DS_Store' '*/.DS_Store'
+          cd ..
+          unzip -l "forum-grading-helper-${{ steps.version.outputs.version }}.zip"
+
+      - name: Check store credentials are configured
+        run: |
+          for v in EXTENSION_ID CLIENT_ID CLIENT_SECRET REFRESH_TOKEN; do
+            if [ -z "${!v}" ]; then echo "::error::Missing secret CWS_$v — see docs/RELEASING.md"; exit 1; fi
+          done
+
+      - name: Upload to the Chrome Web Store
+        run: npx --yes chrome-webstore-upload-cli@3 upload --source "forum-grading-helper-${{ steps.version.outputs.version }}.zip"
+
+      - name: Submit for review (publish)
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: npx --yes chrome-webstore-upload-cli@3 publish
+
+      - name: GitHub Release with the zip
+        if: ${{ github.event_name == 'push' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: forum-grading-helper-${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true

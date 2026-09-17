@@ -47,6 +47,12 @@ Requires Chrome 111+ (content scripts in the page's main world).
   under `fgh:order:*` keys (the page's own storage, no permission needed);
   popup settings live in `chrome.storage.local`.
 
+## Releasing
+
+Push a tag `vX.Y.Z` matching `extension/manifest.json` and GitHub Actions
+uploads the package to the Chrome Web Store and submits it for review — see
+[docs/RELEASING.md](docs/RELEASING.md) for the one-time credential setup.
+
 ## Development
 
 ```sh
