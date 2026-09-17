@@ -1,6 +1,6 @@
 {
   "name": "forum-grading-helper",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Better Forum grading experience. Randomized student order & blind-grading by default.",
   "scripts": {
