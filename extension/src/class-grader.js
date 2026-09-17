@@ -6,7 +6,8 @@
 // poll "Submitted Answers" list, "Assess Multiple") derives from the `user`
 // entity adapter's `ids`, so re-ordering that array in the store re-orders
 // the whole UI consistently. Students get a random, persisted order on first
-// load; breakout/assignment groups keep Forum's order until "Shuffle Order".
+// load (unless "Shuffle student order by default" is off in the popup);
+// breakout/assignment groups keep Forum's order until "Shuffle Order".
 (function (root) {
   'use strict';
 
@@ -27,10 +28,17 @@
   let version = 0;
   let warned = false;
 
+  function shuffleByDefault() {
+    return root.document.documentElement.dataset.fghShuffleByDefault !== '0';
+  }
+
   // Students: first load seeds a random order (mergeOrder with nothing stored
-  // inserts every id at a random position) and persists it.
+  // inserts every id at a random position) and persists it. With the popup
+  // setting off, an unshuffled session keeps Forum's order, like groups.
   function userOrder(ids) {
-    const result = FGH.mergeOrder(FGH.storage.get(KEY_USERS), ids);
+    const stored = FGH.storage.get(KEY_USERS);
+    if (!stored && !shuffleByDefault()) return null;
+    const result = FGH.mergeOrder(stored, ids);
     if (result.changed) FGH.storage.set(KEY_USERS, result.stored);
     return result.order;
   }
@@ -171,9 +179,19 @@
   // Comment boxes grow with their text (polls, video, workbooks).
   const sweepTextareas = FGH.installAutosize(root.document, { selector: 'textarea' });
 
+  // Switching "Shuffle student order by default" on from the popup seeds the
+  // current session right away (userOrder re-runs through the orderer).
+  function onMutations(records) {
+    for (const r of records) {
+      if (r.type === 'attributes' && r.attributeName === 'data-fgh-shuffle-by-default') { if (store) reorder(); break; }
+    }
+    inject();
+    sweepTextareas();
+  }
+
   function observe() {
-    new root.MutationObserver(function () { inject(); sweepTextareas(); }).observe(root.document.documentElement, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress'],
+    new root.MutationObserver(onMutations).observe(root.document.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress', 'data-fgh-shuffle-by-default'],
     });
     inject();
     sweepTextareas();

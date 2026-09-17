@@ -282,6 +282,56 @@ test('assignment grader: group assignments keep the default order until Shuffle 
   assert.equal(log[log.length - 1], 'select:' + order[(order.indexOf('10893') + 1) % order.length]);
 });
 
+// ------------------------------- "Shuffle student order by default" setting
+
+test('assignment grader: setting off — students keep Forum\'s order, nothing stored, no auto-selection; Shuffle Order still works', async () => {
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  win.localStorage.removeItem(KEY);
+  goto('/app/assignment-grader/2491635?blind=true');
+  await tick();
+  win.history.replaceState({}, '', '/app/assignment-grader/2491635/users/10893?blind=true');
+  const log = [];
+  mountWhoPanel('10893', log);
+  await tick();
+  assert.deepEqual(listIds(), GRADEES, 'Forum\'s order kept');
+  assert.equal(win.localStorage.getItem(KEY), null);
+  assert.deepEqual(log, [], 'Forum\'s own first gradee stays selected');
+  const btn = doc.querySelector('h2 > button.fgh-shuffle');
+  assert.ok(btn, 'button still offered');
+  let changed = false;
+  for (let i = 0; i < 6 && !changed; i++) { btn.click(); changed = listIds().join() !== GRADEES.join(); }
+  assert.ok(changed);
+  const shuffled = listIds();
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), shuffled);
+  // Once shuffled, the order is kept on later renders even with the setting off.
+  mountWhoPanel('12429', log);
+  await tick();
+  assert.deepEqual(listIds(), shuffled);
+});
+
+test('assignment grader: switching the setting on seeds the current list right away without moving the selection; off leaves it alone', async () => {
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  win.localStorage.removeItem(KEY);
+  goto('/app/assignment-grader/2491635?blind=true');
+  await tick();
+  win.history.replaceState({}, '', '/app/assignment-grader/2491635/users/10893?blind=true');
+  const log = [];
+  mountWhoPanel('10893', log);
+  await tick();
+  assert.deepEqual(listIds(), GRADEES);
+  doc.documentElement.dataset.fghShuffleByDefault = '1';
+  await tick();
+  const seeded = listIds();
+  assert.deepEqual(seeded.slice().sort(), GRADEES);
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), seeded, 'seeded and persisted');
+  assert.deepEqual(log, [], 'the gradee being graded is not switched from under the user');
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  await tick();
+  assert.deepEqual(listIds(), seeded, 'an existing order is kept when switching off');
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), seeded);
+  delete doc.documentElement.dataset.fghShuffleByDefault;
+});
+
 // ------------------------------------------------------------ progress line
 
 const aProgress = () => doc.querySelector('.adjacent-submissions + .fgh-progress');

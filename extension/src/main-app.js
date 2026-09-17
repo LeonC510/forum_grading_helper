@@ -6,8 +6,10 @@
 //                           opens the grader with ?blind=true
 //   * assignment entrance → hide "Grade Assignment", make "Blind Grade
 //                           Assignment" the primary button
-//   * assignment grader   → random, persisted gradee order in the "Who" list;
-//                           Prev/Next follow it; "Shuffle Order" button
+//   * assignment grader   → random, persisted gradee order in the "Who" list
+//                           (seeded on first visit unless "Shuffle student
+//                           order by default" is off in the popup); Prev/Next
+//                           follow it; "Shuffle Order" button
 // All DOM edits happen in a MutationObserver callback (a microtask that runs
 // after the app commits and before the browser paints), so nothing flickers.
 (function (root) {
@@ -110,6 +112,10 @@
     item.click();
   }
 
+  function shuffleByDefault() {
+    return doc.documentElement.dataset.fghShuffleByDefault !== '0';
+  }
+
   function stepGradee(delta) {
     tick(); // make sure a freshly re-rendered list is already in our order
     const sel = doc.getElementById('student-selector');
@@ -135,8 +141,9 @@
       const items = gradeeItems(sel);
       const ids = items.map(function (el) { return el.dataset.gradeeId; });
       const stored = FGH.storage.get(key);
-      // Students: random from the first render. Groups: only once shuffled.
-      if (stored || type === 'users') {
+      // Students: random from the first render (popup setting permitting).
+      // Groups, and students with the setting off: only once shuffled.
+      if (stored || (type === 'users' && shuffleByDefault())) {
         const result = FGH.mergeOrder(stored, ids);
         if (result.changed) FGH.storage.set(key, result.stored);
         const byId = new Map(items.map(function (el) { return [el.dataset.gradeeId, el]; }));
@@ -234,9 +241,23 @@
     }
   }, true);
 
+  // Switching "Shuffle student order by default" on from the popup seeds the
+  // list on screen right away: forget that it was ordered and let tick() redo it
+  // (a no-op when an order is already stored, i.e. when switching off).
+  function onMutations(records) {
+    for (const r of records) {
+      if (r.type === 'attributes' && r.attributeName === 'data-fgh-shuffle-by-default') {
+        const l = doc.querySelector('#student-selector .dropdown-list');
+        if (l) delete l.dataset.fghOrdered;
+        break;
+      }
+    }
+    tick();
+  }
+
   function observe() {
-    new root.MutationObserver(tick).observe(doc.documentElement, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress'],
+    new root.MutationObserver(onMutations).observe(doc.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress', 'data-fgh-shuffle-by-default'],
     });
     tick();
   }

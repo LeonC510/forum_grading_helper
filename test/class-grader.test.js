@@ -139,13 +139,18 @@ test('group selector gets the button; groups are shuffled only on click and then
   assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY_USERS)), userIds.map(String), 'students untouched by a group shuffle');
 });
 
-test('a stored order is applied on a later load instead of a fresh shuffle', () => {
-  const stored = JSON.parse(win.localStorage.getItem(KEY_USERS));
-  // Re-create a store like a page reload would; storage already has an order.
-  const s2 = rtk.configureStore({
+// A second store the way a page reload would create one (the hook keeps the
+// first grader store for the button, so only the ordering is exercised).
+function reloadedStore() {
+  return rtk.configureStore({
     reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer }),
     middleware: (g) => g({ immutableCheck: false, serializableCheck: false }),
   });
+}
+
+test('a stored order is applied on a later load instead of a fresh shuffle', () => {
+  const stored = JSON.parse(win.localStorage.getItem(KEY_USERS));
+  const s2 = reloadedStore();
   s2.dispatch(slices.user.actions.upsertMany(users));
   assert.deepEqual(plain(s2.getState().user.data.ids).map(String), stored);
 });
@@ -237,3 +242,54 @@ test('comment textareas grow to fit their text when they appear and while typing
   assert.equal(ta.style.height, '150px');
 });
 
+
+// ------------------------------- "Shuffle student order by default" setting
+
+const html = () => win.document.documentElement;
+
+test('setting off: a session with no stored order keeps the reducer order and stores nothing', () => {
+  html().dataset.fghShuffleByDefault = '0';
+  win.localStorage.removeItem(KEY_USERS);
+  const s3 = reloadedStore();
+  s3.dispatch(slices.user.actions.upsertMany(users));
+  assert.deepEqual(plain(s3.getState().user.data.ids), alphabetical);
+  assert.equal(win.localStorage.getItem(KEY_USERS), null);
+});
+
+test('setting off: an order stored by an earlier shuffle is still applied', () => {
+  const stored = alphabetical.slice().reverse().map(String);
+  win.localStorage.setItem(KEY_USERS, JSON.stringify(stored));
+  const s4 = reloadedStore();
+  s4.dispatch(slices.user.actions.upsertMany(users));
+  assert.deepEqual(plain(s4.getState().user.data.ids).map(String), stored);
+});
+
+test('setting off: Shuffle Order is still offered and re-randomizes the students', async () => {
+  win.document.querySelector('.entry-filters').innerHTML = STUDENT_SIDEBAR;
+  await tick();
+  const btn = win.document.querySelector('h2 > button.fgh-shuffle');
+  assert.ok(btn, 'button still offered');
+  const before = store.getState().user.data.ids.slice();
+  let changed = false;
+  for (let i = 0; i < 5 && !changed; i++) {
+    btn.click();
+    changed = store.getState().user.data.ids.join() !== before.join();
+  }
+  assert.ok(changed);
+  const ids = store.getState().user.data.ids;
+  assert.deepEqual(plain(ids).sort((a, b) => a - b), alphabetical);
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY_USERS)), plain(ids).map(String));
+});
+
+test('turning the setting on while the page is open seeds an unseeded session right away; off leaves the order alone', async () => {
+  win.localStorage.removeItem(KEY_USERS); // as if this session had never been shuffled
+  html().dataset.fghShuffleByDefault = '1';
+  await tick();
+  const ids = plain(store.getState().user.data.ids);
+  assert.deepEqual(ids.slice().sort((a, b) => a - b), alphabetical);
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY_USERS)), ids.map(String), 'seeded and persisted');
+  html().dataset.fghShuffleByDefault = '0';
+  await tick();
+  assert.deepEqual(plain(store.getState().user.data.ids), ids, 'an existing order is kept when switching off');
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY_USERS)), ids.map(String));
+});

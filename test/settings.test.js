@@ -23,16 +23,25 @@ function boot(stored) {
   return { win, fire: (changes, area) => listeners.forEach((fn) => fn(changes, area)) };
 }
 
-test('defaults to showing progress when nothing is stored', async () => {
+test('defaults: progress shown and students shuffled by default when nothing is stored', async () => {
   const { win } = boot({});
   await tick();
   assert.equal(win.document.documentElement.dataset.fghShowProgress, '1');
+  assert.equal(win.document.documentElement.dataset.fghShuffleByDefault, '1');
 });
 
-test('reflects a stored "off" setting', async () => {
-  const { win } = boot({ showProgress: false });
+test('reflects stored "off" settings', async () => {
+  const { win } = boot({ showProgress: false, shuffleByDefault: false });
   await tick();
   assert.equal(win.document.documentElement.dataset.fghShowProgress, '0');
+  assert.equal(win.document.documentElement.dataset.fghShuffleByDefault, '0');
+});
+
+test('each setting is mirrored independently', async () => {
+  const { win } = boot({ shuffleByDefault: false });
+  await tick();
+  assert.equal(win.document.documentElement.dataset.fghShowProgress, '1');
+  assert.equal(win.document.documentElement.dataset.fghShuffleByDefault, '0');
 });
 
 test('follows changes made in the popup while the page is open', async () => {
@@ -44,6 +53,11 @@ test('follows changes made in the popup while the page is open', async () => {
   assert.equal(win.document.documentElement.dataset.fghShowProgress, '1');
   fire({ other: { newValue: 1 } }, 'local');
   assert.equal(win.document.documentElement.dataset.fghShowProgress, '1');
+  fire({ shuffleByDefault: { oldValue: true, newValue: false } }, 'local');
+  assert.equal(win.document.documentElement.dataset.fghShuffleByDefault, '0');
+  assert.equal(win.document.documentElement.dataset.fghShowProgress, '1', 'unrelated setting untouched');
+  fire({ shuffleByDefault: { oldValue: false, newValue: true } }, 'sync');
+  assert.equal(win.document.documentElement.dataset.fghShuffleByDefault, '0', 'only the local area is ours');
 });
 
 test('survives a missing chrome.storage (e.g. extension reloaded under the page)', async () => {
@@ -52,4 +66,5 @@ test('survives a missing chrome.storage (e.g. extension reloaded under the page)
   assert.doesNotThrow(() => dom.window.eval(SRC));
   await tick();
   assert.equal(dom.window.document.documentElement.dataset.fghShowProgress, undefined);
+  assert.equal(dom.window.document.documentElement.dataset.fghShuffleByDefault, undefined);
 });

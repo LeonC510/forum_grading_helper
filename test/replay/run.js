@@ -365,6 +365,37 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     await popup.close();
   });
 
+  await check('popup setting "Shuffle student order by default" off: a fresh session keeps Forum\'s order (Shuffle Order still offered); switching it on seeds the open session', async () => {
+    const popup = await browser.newPage();
+    await popup.goto(popupUrl);
+    await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
+    assert.equal(await popup.$eval('#shuffleByDefault', (e) => e.checked), true, 'on by default');
+    await popup.click('#shuffleByDefault');
+    await popup.reload();
+    await popup.waitForFunction(() => document.getElementById('version').textContent !== '…');
+    assert.equal(await popup.$eval('#shuffleByDefault', (e) => e.checked), false, 'persisted');
+    // A session that was never shuffled: forget the stored order and reload.
+    await page.evaluate((k) => localStorage.removeItem(k), KEY_USERS);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('#poll-col section.poll .response-name', { timeout: 30000 });
+    await sleep(500);
+    // Clicking needs the tab in front: headless Chrome renders no frames for a
+    // background tab, so puppeteer's visibility check before a click never settles.
+    await page.bringToFront();
+    const ids = await openDropdown(page);
+    if (alphabetical) assert.deepEqual(ids, alphabetical, 'Forum\'s own order');
+    assert.equal(await page.evaluate((k) => localStorage.getItem(k), KEY_USERS), null, 'nothing stored');
+    assert.ok(await page.$('h2 > button.fgh-shuffle'), 'Shuffle Order still offered');
+    await popup.bringToFront();
+    await popup.click('#shuffleByDefault');
+    await page.waitForFunction((k) => localStorage.getItem(k) !== null, { timeout: 5000 }, KEY_USERS);
+    await page.bringToFront();
+    const seeded = await openDropdown(page);
+    assert.deepEqual(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY_USERS), seeded, 'seeded and persisted');
+    if (alphabetical) assert.notDeepEqual(seeded, alphabetical);
+    await popup.close();
+  });
+
   await browser.close();
   server.close();
   const failed = results.filter((r) => r[0] === 'FAIL').length;

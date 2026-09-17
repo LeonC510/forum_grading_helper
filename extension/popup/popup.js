@@ -4,8 +4,13 @@ document.getElementById('name').textContent = manifest.name;
 document.getElementById('version').textContent = manifest.version;
 
 // Settings live in chrome.storage.local; the content scripts mirror them onto
-// the page (src/settings.js) and react immediately.
-const DEFAULTS = { showProgress: true };
-const showProgress = document.getElementById('showProgress');
-chrome.storage.local.get(DEFAULTS, (values) => { showProgress.checked = !!values.showProgress; });
-showProgress.addEventListener('change', () => chrome.storage.local.set({ showProgress: showProgress.checked }));
+// the page (src/settings.js) and react immediately. Each key has a checkbox
+// with the same id.
+const DEFAULTS = { shuffleByDefault: true, showProgress: true };
+chrome.storage.local.get(DEFAULTS, (values) => {
+  for (const key of Object.keys(DEFAULTS)) document.getElementById(key).checked = !!values[key];
+});
+for (const key of Object.keys(DEFAULTS)) {
+  const box = document.getElementById(key);
+  box.addEventListener('change', () => chrome.storage.local.set({ [key]: box.checked }));
+}
