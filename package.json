@@ -1,6 +1,6 @@
 {
   "name": "forum-grading-helper",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "description": "Better Forum grading experience.",
   "scripts": {
