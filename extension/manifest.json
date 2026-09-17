@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Forum Grading Helper",
-  "version": "0.1.0",
-  "description": "Randomized, persistent student order and blind-by-default grading on Forum (forum.minerva.edu).",
+  "version": "0.2.0",
+  "description": "Better Forum grading experience. Randomized student order & blind-grading by default.",
   "minimum_chrome_version": "111",
   "action": {
     "default_title": "Forum Grading Helper",
