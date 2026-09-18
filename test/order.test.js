@@ -92,6 +92,32 @@ test('storage.get tolerates a missing localStorage', () => {
   assert.doesNotThrow(() => FGH.storage.set('fgh:x', [1]));
 });
 
+test('loadOrder: nothing stored → no ids, not manual', () => {
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: null, manual: false });
+});
+
+test('saveOrder/loadOrder round-trip the ids and the manual flag', () => {
+  FGH.saveOrder('fgh:o', ['3', '1', '2'], true);
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: ['3', '1', '2'], manual: true });
+  FGH.saveOrder('fgh:o', ['2', '3', '1'], false);
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: ['2', '3', '1'], manual: false });
+  assert.deepEqual(JSON.parse(localStorage.getItem('fgh:o')), { ids: ['2', '3', '1'], manual: false });
+});
+
+test('loadOrder: an order saved by earlier versions (plain array) counts as seeded, not manual', () => {
+  localStorage.setItem('fgh:o', JSON.stringify(['1', '2']));
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: ['1', '2'], manual: false });
+});
+
+test('loadOrder: corrupt or unexpected values read as nothing stored', () => {
+  localStorage.setItem('fgh:o', '{not json');
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: null, manual: false });
+  localStorage.setItem('fgh:o', JSON.stringify({ manual: true }));
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: null, manual: false });
+  localStorage.setItem('fgh:o', JSON.stringify(42));
+  assert.deepEqual(FGH.loadOrder('fgh:o'), { ids: null, manual: false });
+});
+
 test('progressText formats "graded/total graded (percent)" with a rounded percent', () => {
   assert.equal(FGH.progressText(13, 15), '13/15 graded (87%)');
   assert.equal(FGH.progressText(0, 18), '0/18 graded (0%)');

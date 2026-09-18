@@ -166,13 +166,13 @@ test('assignment grader: gradees are randomized on first render and persisted', 
   await tick();
   const ids = listIds();
   assert.deepEqual(ids.slice().sort(), GRADEES);
-  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), ids);
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids, manual: false }, 'seeded, not hand-shuffled');
   assert.deepEqual(log, [], 'no selection change on an ordinary render');
 });
 
 test('assignment grader: the same order is re-applied when the panel re-renders', async () => {
   goto('/app/assignment-grader/2491635/users/12429?blind=true');
-  const stored = JSON.parse(win.localStorage.getItem(KEY));
+  const stored = JSON.parse(win.localStorage.getItem(KEY)).ids;
   const log = [];
   mountWhoPanel('12429', log);
   await tick();
@@ -195,7 +195,7 @@ test('assignment grader: Shuffle Order sits in the "Who" heading, uses Forum\'s 
     changed = listIds().join() !== GRADEES.join();
   }
   assert.ok(changed);
-  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), listIds());
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids: listIds(), manual: true }, 'hand-shuffled');
   assert.deepEqual(listIds().slice().sort(), GRADEES);
 });
 
@@ -275,11 +275,94 @@ test('assignment grader: group assignments keep the default order until Shuffle 
   let changed = false;
   for (let i = 0; i < 6 && !changed; i++) { btn.click(); changed = listIds().join() !== GRADEES.join(); }
   assert.ok(changed);
-  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEYG)), listIds());
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEYG)), { ids: listIds(), manual: true });
   // Prev/Next follow the shuffled group order too.
   const order = listIds();
   doc.querySelector('.next-button').click();
   assert.equal(log[log.length - 1], 'select:' + order[(order.indexOf('10893') + 1) % order.length]);
+});
+
+// ------------------------------- "Shuffle student order by default" setting
+
+test('assignment grader: setting off — students keep Forum\'s order, nothing stored, no auto-selection; Shuffle Order still works', async () => {
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  win.localStorage.removeItem(KEY);
+  goto('/app/assignment-grader/2491635?blind=true');
+  await tick();
+  win.history.replaceState({}, '', '/app/assignment-grader/2491635/users/10893?blind=true');
+  const log = [];
+  mountWhoPanel('10893', log);
+  await tick();
+  assert.deepEqual(listIds(), GRADEES, 'Forum\'s order kept');
+  assert.equal(win.localStorage.getItem(KEY), null);
+  assert.deepEqual(log, [], 'Forum\'s own first gradee stays selected');
+  const btn = doc.querySelector('h2 > button.fgh-shuffle');
+  assert.ok(btn, 'button still offered');
+  let changed = false;
+  for (let i = 0; i < 6 && !changed; i++) { btn.click(); changed = listIds().join() !== GRADEES.join(); }
+  assert.ok(changed);
+  const shuffled = listIds();
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids: shuffled, manual: true });
+  // Once shuffled by hand, the order is kept on later renders even with the setting off.
+  mountWhoPanel('12429', log);
+  await tick();
+  assert.deepEqual(listIds(), shuffled);
+});
+
+test('assignment grader: setting off — a seeded order (this version, or a plain array from an earlier one) shows Forum\'s order; a hand-shuffled one applies', async () => {
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  const order = ['12915', '10893', '12928', '12429', '12898'];
+  for (const raw of [{ ids: order, manual: false }, order]) {
+    win.localStorage.setItem(KEY, JSON.stringify(raw));
+    goto('/app/assignment-grader/2491635/users/12429?blind=true');
+    mountWhoPanel('12429', []);
+    await tick();
+    assert.deepEqual(listIds(), GRADEES, 'Forum\'s order');
+    assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), raw, 'storage untouched');
+  }
+  win.localStorage.setItem(KEY, JSON.stringify({ ids: order, manual: true }));
+  mountWhoPanel('12429', []);
+  await tick();
+  assert.deepEqual(listIds(), order);
+});
+
+test('assignment grader: switching the setting on seeds the list on screen without moving the selection; off puts Forum\'s order back (seeded order kept)', async () => {
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  win.localStorage.removeItem(KEY);
+  goto('/app/assignment-grader/2491635?blind=true');
+  await tick();
+  win.history.replaceState({}, '', '/app/assignment-grader/2491635/users/10893?blind=true');
+  const log = [];
+  mountWhoPanel('10893', log);
+  await tick();
+  assert.deepEqual(listIds(), GRADEES);
+  doc.documentElement.dataset.fghShuffleByDefault = '1';
+  await tick();
+  const seeded = listIds();
+  assert.deepEqual(seeded.slice().sort(), GRADEES);
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids: seeded, manual: false }, 'seeded and persisted');
+  assert.deepEqual(log, [], 'the gradee being graded is not switched from under the user');
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  await tick();
+  assert.deepEqual(listIds(), GRADEES, 'Forum\'s order while off');
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids: seeded, manual: false }, 'seeded order kept in storage');
+  assert.deepEqual(log, []);
+  doc.documentElement.dataset.fghShuffleByDefault = '1';
+  await tick();
+  assert.deepEqual(listIds(), seeded, 'same seeded order again when on');
+  // A hand shuffle while off sticks through later toggles.
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  await tick();
+  doc.querySelector('h2 > button.fgh-shuffle').click();
+  const manual = listIds();
+  assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY)), { ids: manual, manual: true });
+  doc.documentElement.dataset.fghShuffleByDefault = '1';
+  await tick();
+  assert.deepEqual(listIds(), manual);
+  doc.documentElement.dataset.fghShuffleByDefault = '0';
+  await tick();
+  assert.deepEqual(listIds(), manual);
+  delete doc.documentElement.dataset.fghShuffleByDefault;
 });
 
 // ------------------------------------------------------------ progress line

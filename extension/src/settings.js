@@ -5,13 +5,18 @@
 (function (root) {
   'use strict';
 
-  const DEFAULTS = { showProgress: true };
+  // storage key -> <html> dataset property (data-fgh-show-progress, …); all
+  // booleans, mirrored as '1' / '0'.
+  const ATTRS = { showProgress: 'fghShowProgress', shuffleByDefault: 'fghShuffleByDefault' };
+  const DEFAULTS = { showProgress: true, shuffleByDefault: true };
   const doc = root.document;
   const storage = root.chrome && root.chrome.storage && root.chrome.storage.local;
   if (!storage) return;
 
   function apply(values) {
-    if ('showProgress' in values) doc.documentElement.dataset.fghShowProgress = values.showProgress ? '1' : '0';
+    for (const key of Object.keys(ATTRS)) {
+      if (key in values) doc.documentElement.dataset[ATTRS[key]] = values[key] ? '1' : '0';
+    }
   }
 
   try {

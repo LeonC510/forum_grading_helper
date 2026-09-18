@@ -10,7 +10,10 @@ Chrome extension (Manifest V3) for professors and TAs grading on
   button to the right of *Who* in the sidebar re-randomizes it. The sidebar
   dropdown, Prev/Next and the poll answer list always share the same order.
   Group selectors (group workbooks, group assignments) keep Forum's order
-  until you click Shuffle Order.
+  until you click Shuffle Order. Switch off *Shuffle student order by
+  default* in the popup and students show Forum's order too, except where
+  you clicked Shuffle Order yourself; switching it back on restores the
+  random orders.
 * **Blind grading by default**: the class page button reads *Blind Assess
   Class* and opens the grader with `?blind=true`; on the assignment page only
   *Blind Grade Assignment* remains, styled as the primary button. Pages where

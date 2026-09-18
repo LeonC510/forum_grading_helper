@@ -6,7 +6,9 @@
 // poll "Submitted Answers" list, "Assess Multiple") derives from the `user`
 // entity adapter's `ids`, so re-ordering that array in the store re-orders
 // the whole UI consistently. Students get a random, persisted order on first
-// load; breakout/assignment groups keep Forum's order until "Shuffle Order".
+// load while "Shuffle student order by default" is on in the popup (off, only
+// an order shuffled by hand applies); breakout/assignment groups keep Forum's
+// order until "Shuffle Order".
 (function (root) {
   'use strict';
 
@@ -27,11 +29,19 @@
   let version = 0;
   let warned = false;
 
+  function shuffleByDefault() {
+    return root.document.documentElement.dataset.fghShuffleByDefault !== '0';
+  }
+
   // Students: first load seeds a random order (mergeOrder with nothing stored
-  // inserts every id at a random position) and persists it.
+  // inserts every id at a random position) and persists it. With the popup
+  // setting off, only an order the user shuffled by hand applies; a seeded one
+  // stays in storage for when the setting comes back on.
   function userOrder(ids) {
-    const result = FGH.mergeOrder(FGH.storage.get(KEY_USERS), ids);
-    if (result.changed) FGH.storage.set(KEY_USERS, result.stored);
+    const saved = FGH.loadOrder(KEY_USERS);
+    if (!saved.manual && !shuffleByDefault()) return null;
+    const result = FGH.mergeOrder(saved.ids, ids);
+    if (result.changed) FGH.saveOrder(KEY_USERS, result.stored, saved.manual);
     return result.order;
   }
 
@@ -82,7 +92,7 @@
   }
 
   function shuffleStudents() {
-    FGH.storage.set(KEY_USERS, FGH.shuffle(sliceIds(store.getState(), 'user')).map(String));
+    FGH.saveOrder(KEY_USERS, FGH.shuffle(sliceIds(store.getState(), 'user')).map(String), true);
     reorder();
   }
 
@@ -171,9 +181,20 @@
   // Comment boxes grow with their text (polls, video, workbooks).
   const sweepTextareas = FGH.installAutosize(root.document, { selector: 'textarea' });
 
+  // Switching "Shuffle student order by default" from the popup takes effect
+  // right away (userOrder re-runs through the orderer): on seeds an unshuffled
+  // session, off puts Forum's order back unless the user shuffled by hand.
+  function onMutations(records) {
+    for (const r of records) {
+      if (r.type === 'attributes' && r.attributeName === 'data-fgh-shuffle-by-default') { if (store) reorder(); break; }
+    }
+    inject();
+    sweepTextareas();
+  }
+
   function observe() {
-    new root.MutationObserver(function () { inject(); sweepTextareas(); }).observe(root.document.documentElement, {
-      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress'],
+    new root.MutationObserver(onMutations).observe(root.document.documentElement, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['data-fgh-show-progress', 'data-fgh-shuffle-by-default'],
     });
     inject();
     sweepTextareas();
