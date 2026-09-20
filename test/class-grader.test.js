@@ -44,20 +44,41 @@ before(() => {
   });
   slices = { user: mk('user', userAdapter), assignmentGroup: mk('assignmentGroup', plain), breakoutGroup: mk('breakoutGroup', plain), outcomeAssessment: mk('outcomeAssessment', plain) };
   slices.filter = rtk.createSlice({ name: 'filter', initialState: { selectedUserId: null, currentBreakoutId: null }, reducers: { setFilterValue: (s, a) => { s[a.payload.name] = a.payload.value; } } });
+  // The viewer's class capabilities, fetched by the bundle from
+  // /api/v1/roles/classes/<id>/capabilities (keys underscored; null until then).
+  slices.capability = rtk.createSlice({ name: 'capability', initialState: { data: null, error: null, loading: false }, reducers: { set: (s, a) => { s.data = a.payload; } } });
   store = rtk.configureStore({
-    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer, outcomeAssessment: slices.outcomeAssessment.reducer, filter: slices.filter.reducer }),
+    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer, outcomeAssessment: slices.outcomeAssessment.reducer, filter: slices.filter.reducer, capability: slices.capability.reducer }),
     middleware: (g) => g({ immutableCheck: false, serializableCheck: false }),
   });
 });
+
+// Trimmed from page_grabs/Class Video Scoring.har (an instructor).
+const GRADER_CAPS = { can_grade_assignments: true, can_grade_polls_videos: true, can_access_class_grader: true, can_participate_in_class: false };
 
 const users = Array.from({ length: 12 }, (_, i) => ({ id: 100 + i, first_name: String.fromCharCode(65 + i) + 'name' }));
 const alphabetical = users.map((u) => u.id);
 const KEY_USERS = 'fgh:order:class:4087-13565-104842:users';
 const KEY_GROUPS = 'fgh:order:class:4087-13565-104842:groups';
 
-test('students are randomized on first load and the order is persisted', () => {
+// The class data (students) and the viewer's capabilities are fetched in
+// parallel; until the latter say the viewer can grade, the page is a
+// student's as far as we know and is left exactly as Forum made it.
+test('until the capabilities land, students keep the reducer order, nothing is stored and no tools are added', async () => {
+  win.document.querySelector('.entry-filters').innerHTML = STUDENT_SIDEBAR;
   store.dispatch(slices.user.actions.upsertMany(users));
+  await tick();
+  assert.deepEqual(plain(store.getState().user.data.ids), alphabetical);
+  assert.equal(win.localStorage.getItem(KEY_USERS), null);
+  assert.equal(win.document.querySelector('.fgh-shuffle'), null);
+  assert.equal(win.document.querySelector('.fgh-progress'), null);
+});
+
+test('once the capabilities say the viewer can grade, students are randomized, persisted, and the tools appear (no DOM change needed)', () => {
+  store.dispatch(slices.capability.actions.set(GRADER_CAPS));
   const ids = store.getState().user.data.ids;
+  assert.ok(win.document.querySelector('h2 > button.fgh-shuffle'), 'Shuffle Order injected from the store update');
+  assert.equal(win.document.querySelector('#student-selector + .fgh-progress').textContent, '0/12 graded (0%)');
   assert.deepEqual(plain(ids).sort((a, b) => a - b), alphabetical);
   assert.notDeepEqual(plain(ids), alphabetical, 'alphabetical order must not appear (12! chance of a false failure)');
   assert.deepEqual(JSON.parse(win.localStorage.getItem(KEY_USERS)), { ids: plain(ids).map(String), manual: false }, 'seeded, not hand-shuffled');
@@ -71,7 +92,8 @@ test('groups keep the reducer order until shuffled', () => {
   assert.equal(win.localStorage.getItem(KEY_GROUPS), null);
 });
 
-test('no Shuffle button without a student selector (non-grader view)', async () => {
+test('no Shuffle button without a student selector', async () => {
+  win.document.querySelector('.entry-filters').innerHTML = '';
   await tick();
   assert.equal(win.document.querySelector('.fgh-shuffle'), null);
 });
@@ -141,12 +163,23 @@ test('group selector gets the button; groups are shuffled only on click and then
 
 // A second store the way a page reload would create one (the hook keeps the
 // first grader store for the button, so only the ordering is exercised).
-function reloadedStore() {
-  return rtk.configureStore({
-    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer }),
+// The capabilities are in already, as they normally are before the class data.
+function reloadedStore(caps = GRADER_CAPS) {
+  const s = rtk.configureStore({
+    reducer: rtk.combineReducers({ user: slices.user.reducer, assignmentGroup: slices.assignmentGroup.reducer, breakoutGroup: slices.breakoutGroup.reducer, capability: slices.capability.reducer }),
     middleware: (g) => g({ immutableCheck: false, serializableCheck: false }),
   });
+  if (caps) s.dispatch(slices.capability.actions.set(caps));
+  return s;
 }
+
+test('a viewer who cannot grade (a student on the video tab) keeps the reducer order on every load, and nothing is stored', () => {
+  const stored = win.localStorage.getItem(KEY_USERS);
+  const s2 = reloadedStore({ ...GRADER_CAPS, can_grade_polls_videos: false, can_grade_assignments: false, can_participate_in_class: true });
+  s2.dispatch(slices.user.actions.upsertMany(users));
+  assert.deepEqual(plain(s2.getState().user.data.ids), alphabetical, 'even though this browser has a stored order for the session');
+  assert.equal(win.localStorage.getItem(KEY_USERS), stored, 'storage untouched');
+});
 
 test('a stored order is applied on a later load instead of a fresh shuffle', () => {
   const stored = JSON.parse(win.localStorage.getItem(KEY_USERS)).ids;
