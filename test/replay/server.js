@@ -13,6 +13,9 @@ const MIME = { '.js': 'application/javascript', '.css': 'text/css', '.svg': 'ima
 
 // Page routes: which saved page to serve for which URL path.
 const PAGES = [
+  // Class 105001 was recorded as a student (its API responses come from
+  // "Class Video Scoring Student.har"); every other class as an instructor.
+  { re: /^\/app\/courses\/\d+\/sections\/\d+\/classes\/105001\/review(\/\d+)?$/, file: 'Class Video Scoring Student.html' },
   { re: /^\/app\/courses\/\d+\/sections\/\d+\/classes\/\d+\/review(\/\d+)?$/, file: 'Class Poll Scoring.htm' },
   { re: /^\/app\/courses\/\d+\/sections\/\d+\/classes\/\d+$/, file: 'Class Assessment Page Entrance.html' },
   { re: /^\/app\/assignments\/\d+$/, file: 'Assignment Scoring Entrance.htm' },

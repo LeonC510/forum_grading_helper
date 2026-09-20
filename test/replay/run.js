@@ -233,6 +233,30 @@ const groupDropdown = (page) => page.$$eval('#student-selector .dropdown .studen
     assert.deepEqual((await storedOrder(page, KEY_USERS)).ids, order);
   });
 
+  // ----------------------------------------------- class grader, as a student
+  // Class 105001 was recorded as a student (video tab): Forum's capabilities
+  // for it say "can grade polls videos": false, so the page must be left as
+  // Forum made it — the real bundle's store is what decides here.
+  const STUDENT = 'https://forum.minerva.edu/app/courses/4108/sections/13534/classes/105001/review?tab=video';
+  await check('class grader as a student: no Shuffle Order, no progress line, Forum\'s order, nothing stored', async () => {
+    const cls = await (await fetch(`https://127.0.0.1:${PORT}/api/v1/class_grader/classes/105001`, { headers: { host: 'forum.minerva.edu' } })).json();
+    const forumOrder = cls.class_users.map((c) => c.user).sort((a, b) => a.first_name.localeCompare(b.first_name)).map((u) => String(u.id));
+    const landed = Promise.all([
+      page.waitForResponse((r) => r.url().endsWith('/roles/classes/105001/capabilities')),
+      page.waitForResponse((r) => r.url().endsWith('/class_grader/classes/105001')),
+    ]);
+    await page.goto(STUDENT, { waitUntil: 'domcontentloaded' });
+    await landed;
+    await page.waitForSelector('#student-selector .current-selection', { timeout: 30000 });
+    await sleep(1000); // let the app settle / re-render
+    assert.equal(await page.$('#assessments-not-released, #assessments-released'), null, 'fixture is a student view: no Release Status');
+    assert.ok(await page.$('h2 + #student-selector'), 'but the "Who" selector is there');
+    assert.equal(await page.$('.fgh-shuffle'), null, 'no Shuffle Order');
+    assert.equal(await page.$('.fgh-progress'), null, 'no progress line');
+    assert.deepEqual(await openDropdown(page), forumOrder, 'Forum\'s own (alphabetical) order');
+    assert.equal(await storedOrder(page, 'fgh:order:class:4108-13534-105001:users'), null, 'nothing stored');
+  });
+
   await check('class grader: no page errors', async () => {
     assert.deepEqual(errors, []);
   });

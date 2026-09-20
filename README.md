@@ -23,6 +23,10 @@ Chrome extension (Manifest V3) for professors and TAs grading on
   session (comments alone don't count); in the assignment grader, once an
   outcome score is attached. Can be switched off in the popup.
 * **Comment boxes grow with your text** (never smaller than Forum's default).
+* **Only when you are the grader**: students open the same class review page
+  (the video tab, with its *Who* selector). Where Forum's capabilities for
+  the class say you can't grade, the page is left untouched: Forum's order,
+  no Shuffle Order, no progress line, nothing stored.
 
 ## Install (unpacked)
 
@@ -42,6 +46,9 @@ Requires Chrome 111+ (content scripts in the page's main world).
   separate React/Redux-Toolkit app. We install a store enhancer through the
   `__REDUX_DEVTOOLS_EXTENSION_COMPOSE__` hook RTK consults, and re-order the
   `user` entity ids there; every student list in that app derives from it.
+  All of it is gated on `state.capability.data.can_grade_polls_videos` (the
+  class capabilities the bundle fetches, and its own test for showing
+  *Release Status*); until they arrive the viewer counts as a student.
 * `extension/src/order.js` — shuffle / merge / storage / progress / autosize helpers.
 * `extension/src/settings.js` — mirrors the popup's settings
   (`chrome.storage.local`, the only permission) onto `<html data-fgh-…>` so
@@ -68,7 +75,9 @@ npm run replay    # real Chrome + the unpacked extension against replayed Forum 
 ```
 
 `page_grabs/` holds saved Forum pages and HAR files used to derive selectors
-and fixtures (`test/fixtures/` are cut from them). `npm run replay` serves
+and fixtures (`test/fixtures/` are cut from them); save them with the
+extension switched off, or strip what it injected (`fgh-*` markup, the
+`data-fgh-*` attributes on `<html>`). `npm run replay` serves
 those pages and the recorded API responses over a local HTTPS server mapped
 to forum.minerva.edu (`--host-resolver-rules`), loads the extension into the
 installed Google Chrome (headless; `FGH_HEADFUL=1` to watch) and checks the

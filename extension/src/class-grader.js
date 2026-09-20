@@ -9,6 +9,11 @@
 // load while "Shuffle student order by default" is on in the popup (off, only
 // an order shuffled by hand applies); breakout/assignment groups keep Forum's
 // order until "Shuffle Order".
+//
+// Who is looking: students open the same page (the video tab, with the "Who"
+// selector and Prev/Next), so everything above is gated on the viewer's class
+// capabilities, which the bundle fetches into the `capability` slice and
+// itself uses to hide Release Status. Until they are in nobody is a grader.
 (function (root) {
   'use strict';
 
@@ -60,23 +65,37 @@
     };
   }
 
+  // Forum's own test for the grading UI: /api/v1/roles/classes/<id>/capabilities
+  // ("can grade polls videos", keys underscored by the bundle). A student has
+  // it false; null until the response is in.
+  function canGrade(state) {
+    const caps = state && state.capability && state.capability.data;
+    return !!(caps && caps.can_grade_polls_videos);
+  }
+
   const hook = StoreHook.install(root);
-  hook.setOrderer(StoreHook.createStateOrderer({
+  const orderer = StoreHook.createStateOrderer({
     slices: {
       user: userOrder,
       assignmentGroup: groupOrder('assignmentGroup'),
       breakoutGroup: groupOrder('breakoutGroup'),
     },
     getVersion: function () { return version; },
-  }));
+  });
+  // The orderer's memo is keyed on slice references, so it must not see a
+  // state before the viewer is known to grade: when the capabilities arrive
+  // after the class data, the first call then orders the students.
+  hook.setOrderer(function (state) { return canGrade(state) ? orderer(state) : state; });
   // Forum creates one store; keep the first one that has the grader's slices.
   function isGraderStore(s) {
     try { const st = s.getState(); return !!(st && st.user && st.user.data); } catch (e) { return false; }
   }
+  // Subscribed to inject (not just the progress line): the capabilities may
+  // arrive after the sidebar is on screen, and that is a store change only.
   hook.onStore(function (s) {
     if (!store || (!isGraderStore(store) && isGraderStore(s))) {
       store = s;
-      store.subscribe(refreshProgress);
+      store.subscribe(inject);
     }
   });
 
@@ -159,11 +178,13 @@
   // Add "Shuffle Order" to the right of the "Who" heading that precedes
   // #student-selector. The heading is React-managed but React only owns its
   // text node, so an appended button survives re-renders; if the heading is
-  // unmounted (tab switch) the observer simply injects again.
+  // unmounted (tab switch) the observer simply injects again. Nothing is
+  // added while the viewer is not known to be a grader.
   function inject() {
     const doc = root.document;
     const sel = doc.getElementById('student-selector');
     if (!sel) return;
+    if (store && !canGrade(store.getState())) return;
     refreshProgress();
     const h2 = sel.previousElementSibling;
     if (!h2 || h2.tagName !== 'H2' || h2.querySelector('.fgh-shuffle') || h2.textContent.trim() !== 'Who') return;
