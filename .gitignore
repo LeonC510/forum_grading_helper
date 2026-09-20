@@ -2,3 +2,4 @@ node_modules/
 page_grabs/
 test/replay/.certs/
 forum-grading-helper-*.zip
+.DS_Store
